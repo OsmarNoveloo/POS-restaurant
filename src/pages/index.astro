@@ -1,0 +1,117 @@
+---
+import '../styles/global.css';
+---
+
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<title>La Cocina · Punto de Venta</title>
+	</head>
+	<body>
+		<header class="navbar">
+			<div class="brand">
+				<span class="brand-icon">🍽️</span>
+				<span class="brand-name">La Cocina <strong>POS</strong></span>
+			</div>
+
+			<nav class="order-tabs" id="orderTabs" aria-label="Órdenes abiertas"></nav>
+
+			<div class="navbar-actions">
+				<button id="newOrderBtn" class="btn ghost" title="Nueva orden">
+					<span class="btn-icon">+</span><span class="btn-label"> Nueva orden</span>
+				</button>
+				<a href="/mesero" class="btn ghost" title="Ver Mesero"	>
+					<span class="btn-icon">🧑‍🍳</span><span class="btn-label"> Ver Mesero</span>
+				</a>
+				<a href="/dashboard" class="btn ghost" title="Dashboard">
+					<span class="btn-icon">📊</span><span class="btn-label"> Dashboard</span>
+				</a>
+				<div class="daily-sales">
+					<span class="label">Ventas del día</span>
+					<span class="value" id="dailySales">$0.00</span>
+				</div>
+			</div>
+		</header>
+
+		<main class="pos">
+			<section class="catalog">
+				<div class="category-filters" id="categoryFilters"></div>
+				<div class="product-grid" id="productGrid"></div>
+			</section>
+
+			<aside class="order-panel">
+				<div class="order-panel-header">
+					<h2 id="activeOrderName">Mesa 1</h2>
+					<button id="clearOrderBtn" class="btn text" title="Vaciar orden">Vaciar</button>
+				</div>
+
+				<ul class="cart-items" id="cartItems"></ul>
+				<p class="order-empty" id="orderEmpty">Agrega productos del menú para iniciar la orden.</p>
+
+				<div class="order-totals">
+					<div class="row">
+						<span>Subtotal</span>
+						<span id="subtotal">$0.00</span>
+					</div>
+					<div class="row">
+						<span>IVA (16%)</span>
+						<span id="tax">$0.00</span>
+					</div>
+					<div class="row total">
+						<span>Total</span>
+						<span id="total">$0.00</span>
+					</div>
+				</div>
+
+				<button id="chargeBtn" class="btn primary charge-btn">Cobrar</button>
+			</aside>
+		</main>
+
+		<div class="modal-overlay" id="paymentModal">
+			<div class="modal">
+				<h3>Cobrar orden</h3>
+				<p class="modal-order-name" id="modalOrderName">Mesa 1</p>
+				<p class="modal-total" id="modalTotal">$0.00</p>
+
+				<div class="payment-methods" id="paymentMethods">
+					<button type="button" class="method-btn active" data-method="efectivo">💵 Efectivo</button>
+					<button type="button" class="method-btn" data-method="tarjeta">💳 Tarjeta</button>
+				</div>
+
+				<div id="cashFields" class="cash-fields">
+					<label for="cashReceived">Recibido</label>
+					<input type="number" id="cashReceived" min="0" step="0.01" placeholder="0.00" />
+					<div class="change-row">
+						<span>Cambio</span>
+						<span id="changeAmount">$0.00</span>
+					</div>
+				</div>
+
+				<p id="cardNote" class="card-note">Pago con tarjeta simulado — se confirmará al instante.</p>
+
+				<div class="modal-actions">
+					<button id="cancelPaymentBtn" class="btn secondary">Cancelar</button>
+					<button id="confirmPaymentBtn" class="btn primary">Confirmar pago</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="modal-overlay" id="confirmModal">
+			<div class="modal">
+				<h3>Eliminar orden</h3>
+				<p id="confirmMessage">¿Eliminar esta orden?</p>
+				<div class="modal-actions">
+					<button id="confirmCancelBtn" class="btn secondary">Cancelar</button>
+					<button id="confirmDeleteBtn" class="btn danger">Eliminar</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="toast" id="toast"></div>
+
+		<script type="module" src="/pos.js"></script>
+	</body>
+</html>

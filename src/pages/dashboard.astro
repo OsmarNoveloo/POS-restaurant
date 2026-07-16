@@ -1,0 +1,85 @@
+---
+import '../styles/global.css';
+---
+
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<title>La Cocina · Dashboard</title>
+	</head>
+	<body>
+		<header class="navbar">
+			<div class="brand">
+				<span class="brand-icon">📊</span>
+				<span class="brand-name">La Cocina <strong>Dashboard</strong></span>
+			</div>
+
+			<div class="navbar-actions">
+				<a href="/" class="btn ghost" title="Ver Caja">
+					<span class="btn-icon">🧾</span><span class="btn-label"> Ver Caja</span>
+				</a>
+				<a href="/mesero" class="btn ghost" title="Ver Mesero">
+					<span class="btn-icon">🧑‍🍳</span><span class="btn-label"> Ver Mesero</span>
+				</a>
+			</div>
+		</header>
+
+		<main class="dashboard viz-root">
+			<section class="stat-tiles">
+				<div class="stat-tile hero">
+					<span class="stat-label">Ventas del día</span>
+					<span class="stat-value" id="statDailySales">$0.00</span>
+				</div>
+				<div class="stat-tile">
+					<span class="stat-label">Órdenes cobradas</span>
+					<span class="stat-value" id="statOrderCount">0</span>
+				</div>
+				<div class="stat-tile">
+					<span class="stat-label">Ticket promedio</span>
+					<span class="stat-value" id="statAvgTicket">$0.00</span>
+				</div>
+				<div class="stat-tile">
+					<span class="stat-label">Mesas activas</span>
+					<span class="stat-value" id="statActiveTables">0 / 0</span>
+				</div>
+			</section>
+
+			<div class="dashboard-grid">
+				<section class="dashboard-card">
+					<h2 class="card-title">Ventas por categoría</h2>
+					<div class="bar-chart" id="categoryChart"></div>
+					<p class="empty-state" id="categoryChartEmpty">Aún no hay ventas registradas.</p>
+				</section>
+
+				<section class="dashboard-card">
+					<h2 class="card-title">Mesas en vivo</h2>
+					<div class="table-grid compact" id="liveTables"></div>
+				</section>
+			</div>
+
+			<section class="dashboard-card">
+				<h2 class="card-title">Registro de ventas</h2>
+				<div class="table-scroll" id="salesTableWrap">
+					<table class="sales-table">
+						<thead>
+							<tr>
+								<th>Hora</th>
+								<th>Mesa</th>
+								<th>Productos</th>
+								<th>Pago</th>
+								<th class="align-right">Total</th>
+							</tr>
+						</thead>
+						<tbody id="salesLogBody"></tbody>
+					</table>
+				</div>
+				<p class="empty-state" id="salesLogEmpty">Aún no se ha cobrado ninguna orden. Cobra una venta en la Caja para verla aquí.</p>
+			</section>
+		</main>
+
+		<script type="module" src="/dashboard.js"></script>
+	</body>
+</html>

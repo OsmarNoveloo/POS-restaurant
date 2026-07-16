@@ -1,0 +1,22 @@
+[
+  { "id": 1, "name": "Guacamole", "price": 65, "category": "Entradas", "icon": "🥑" },
+  { "id": 2, "name": "Nachos", "price": 75, "category": "Entradas", "icon": "🧀" },
+  { "id": 3, "name": "Sopa Azteca", "price": 60, "category": "Entradas", "icon": "🍲" },
+  { "id": 4, "name": "Quesadillas", "price": 55, "category": "Entradas", "icon": "🫓" },
+
+  { "id": 5, "name": "Tacos al Pastor", "price": 95, "category": "Platos Fuertes", "icon": "🌮" },
+  { "id": 6, "name": "Enchiladas Verdes", "price": 110, "category": "Platos Fuertes", "icon": "🌯" },
+  { "id": 7, "name": "Milanesa", "price": 130, "category": "Platos Fuertes", "icon": "🍗" },
+  { "id": 8, "name": "Pescado a la Plancha", "price": 145, "category": "Platos Fuertes", "icon": "🐟" },
+  { "id": 9, "name": "Molcajete", "price": 175, "category": "Platos Fuertes", "icon": "🔥" },
+
+  { "id": 10, "name": "Agua de Horchata", "price": 30, "category": "Bebidas", "icon": "🥛" },
+  { "id": 11, "name": "Refresco", "price": 25, "category": "Bebidas", "icon": "🥤" },
+  { "id": 12, "name": "Cerveza", "price": 45, "category": "Bebidas", "icon": "🍺" },
+  { "id": 13, "name": "Margarita", "price": 85, "category": "Bebidas", "icon": "🍹" },
+  { "id": 14, "name": "Café de Olla", "price": 28, "category": "Bebidas", "icon": "☕" },
+
+  { "id": 15, "name": "Flan", "price": 45, "category": "Postres", "icon": "🍮" },
+  { "id": 16, "name": "Churros", "price": 50, "category": "Postres", "icon": "🥮" },
+  { "id": 17, "name": "Pastel de Tres Leches", "price": 55, "category": "Postres", "icon": "🍰" }
+]
