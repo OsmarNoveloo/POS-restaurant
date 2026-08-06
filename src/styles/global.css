@@ -650,28 +650,6 @@ a.btn {
 	margin: 0 0 1rem;
 }
 
-.payment-methods {
-	display: flex;
-	gap: 0.6rem;
-	margin-bottom: 1rem;
-}
-
-.method-btn {
-	flex: 1;
-	padding: 0.6rem;
-	border-radius: 8px;
-	border: 1px solid var(--cream-dark);
-	background: var(--cream);
-	font-weight: 600;
-	font-size: 0.85rem;
-}
-
-.method-btn.active {
-	background: var(--gold);
-	border-color: var(--gold);
-	color: var(--wood);
-}
-
 .cash-fields label {
 	font-size: 0.8rem;
 	color: var(--muted);
@@ -693,15 +671,6 @@ a.btn {
 	justify-content: space-between;
 	font-weight: 700;
 	font-size: 0.95rem;
-}
-
-.card-note {
-	display: none;
-	font-size: 0.85rem;
-	color: var(--muted);
-	background: var(--cream);
-	padding: 0.7rem;
-	border-radius: 8px;
 }
 
 .modal-actions {
@@ -919,6 +888,99 @@ a.btn {
 
 .sales-table .align-right {
 	text-align: right;
+}
+
+/* Productos CRUD */
+.producto-form {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 1rem;
+	align-items: end;
+}
+
+.form-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-width: 0;
+}
+
+.form-field label {
+	font-size: 0.8rem;
+	color: var(--muted);
+	font-weight: 600;
+}
+
+.form-field input {
+	padding: 0.6rem;
+	border-radius: 8px;
+	border: 1px solid var(--cream-dark);
+	font-size: 0.9rem;
+	font-family: inherit;
+	color: var(--ink);
+}
+
+.form-field.checkbox-field {
+	flex-direction: row;
+	align-items: center;
+}
+
+.form-field.checkbox-field label {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.85rem;
+	color: var(--ink);
+}
+
+.form-actions {
+	display: flex;
+	gap: 0.6rem;
+	grid-column: 1 / -1;
+}
+
+.producto-icon-cell {
+	font-size: 1.2rem;
+	width: 1.6rem;
+}
+
+.status-badge.active {
+	background: rgba(76, 140, 74, 0.15);
+	color: var(--success);
+}
+
+.status-badge.inactive {
+	background: var(--cream-dark);
+	color: var(--muted);
+}
+
+.row-actions {
+	display: flex;
+	gap: 0.4rem;
+	justify-content: flex-end;
+}
+
+.row-action-btn {
+	border: 1px solid var(--cream-dark);
+	background: #fff;
+	border-radius: 6px;
+	width: 28px;
+	height: 28px;
+	font-size: 0.85rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--ink);
+}
+
+.row-action-btn:hover {
+	background: var(--cream);
+}
+
+.row-action-btn.danger:hover {
+	background: var(--brick);
+	color: #fff;
+	border-color: var(--brick);
 }
 
 /* Responsive */

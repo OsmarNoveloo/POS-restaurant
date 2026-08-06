@@ -29,6 +29,9 @@ import '../styles/global.css';
 				<a href="/dashboard" class="btn ghost" title="Dashboard">
 					<span class="btn-icon">📊</span><span class="btn-label"> Dashboard</span>
 				</a>
+				<a href="/productos" class="btn ghost" title="Productos">
+					<span class="btn-icon">🍽️</span><span class="btn-label"> Productos</span>
+				</a>
 				<div class="daily-sales">
 					<span class="label">Ventas del día</span>
 					<span class="value" id="dailySales">$0.00</span>
@@ -56,10 +59,6 @@ import '../styles/global.css';
 						<span>Subtotal</span>
 						<span id="subtotal">$0.00</span>
 					</div>
-					<div class="row">
-						<span>IVA (16%)</span>
-						<span id="tax">$0.00</span>
-					</div>
 					<div class="row total">
 						<span>Total</span>
 						<span id="total">$0.00</span>
@@ -76,12 +75,7 @@ import '../styles/global.css';
 				<p class="modal-order-name" id="modalOrderName">Mesa 1</p>
 				<p class="modal-total" id="modalTotal">$0.00</p>
 
-				<div class="payment-methods" id="paymentMethods">
-					<button type="button" class="method-btn active" data-method="efectivo">💵 Efectivo</button>
-					<button type="button" class="method-btn" data-method="tarjeta">💳 Tarjeta</button>
-				</div>
-
-				<div id="cashFields" class="cash-fields">
+				<div class="cash-fields">
 					<label for="cashReceived">Recibido</label>
 					<input type="number" id="cashReceived" min="0" step="0.01" placeholder="0.00" />
 					<div class="change-row">
@@ -89,8 +83,6 @@ import '../styles/global.css';
 						<span id="changeAmount">$0.00</span>
 					</div>
 				</div>
-
-				<p id="cardNote" class="card-note">Pago con tarjeta simulado — se confirmará al instante.</p>
 
 				<div class="modal-actions">
 					<button id="cancelPaymentBtn" class="btn secondary">Cancelar</button>
@@ -112,6 +104,8 @@ import '../styles/global.css';
 
 		<div class="toast" id="toast"></div>
 
-		<script type="module" src="/pos.js"></script>
+		<script>
+			import '../scripts/pos.ts';
+		</script>
 	</body>
 </html>

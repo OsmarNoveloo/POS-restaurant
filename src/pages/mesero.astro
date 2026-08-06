@@ -24,6 +24,9 @@ import '../styles/global.css';
 				<a href="/dashboard" class="btn ghost" title="Dashboard">
 					<span class="btn-icon">📊</span><span class="btn-label"> Dashboard</span>
 				</a>
+				<a href="/productos" class="btn ghost" title="Productos">
+					<span class="btn-icon">🍽️</span><span class="btn-label"> Productos</span>
+				</a>
 			</div>
 		</header>
 
@@ -60,10 +63,6 @@ import '../styles/global.css';
 								<span>Subtotal</span>
 								<span id="subtotal">$0.00</span>
 							</div>
-							<div class="row">
-								<span>IVA (16%)</span>
-								<span id="tax">$0.00</span>
-							</div>
 							<div class="row total">
 								<span>Total</span>
 								<span id="total">$0.00</span>
@@ -78,6 +77,8 @@ import '../styles/global.css';
 
 		<div class="toast" id="toast"></div>
 
-		<script type="module" src="/mesero.js"></script>
+		<script>
+			import '../scripts/mesero.ts';
+		</script>
 	</body>
 </html>
