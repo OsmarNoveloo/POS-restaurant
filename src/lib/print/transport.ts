@@ -67,13 +67,15 @@ function printViaRawBT(bytes: Uint8Array): void {
 
 // La app Bluetooth Print (Thermer) en iOS no acepta bytes ESC/POS embebidos en la
 // URL. Su esquema es `thermer://?data=<JSON percent-encoded>` (ver
-// github.com/tussharmate/ios-thermer-custom-schema): el arreglo de entradas
-// (texto/imagen/barcode/QR) va directo en el query param, no se le pasa una URL
-// para que la app la vaya a buscar. El ticket se arma del lado del servidor en
-// /ventas/:id/ticket-thermer y aquí solo se reenvía embebido en el deep link.
+// github.com/tussharmate/ios-thermer-custom-schema), y el demo oficial codifica
+// las entradas como `[Int: PrintEntry]`: un diccionario Swift indexado, que
+// JSONEncoder serializa como objeto `{"0": {...}, "1": {...}}`, no como arreglo.
+// El ticket se arma del lado del servidor en /ventas/:id/ticket-thermer (como
+// arreglo) y aquí se reindexa antes de mandarlo embebido en el deep link.
 async function printViaBrowserPrint(ventaId: number): Promise<void> {
 	const entries = await ventas.ticketThermer(ventaId);
-	const data = encodeURIComponent(JSON.stringify(entries));
+	const indexed = Object.fromEntries(entries.map((entry, i) => [i, entry]));
+	const data = encodeURIComponent(JSON.stringify(indexed));
 	window.location.href = `thermer://?data=${data}`;
 }
 
