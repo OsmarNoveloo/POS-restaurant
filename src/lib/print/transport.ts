@@ -73,7 +73,8 @@ function printViaRawBT(bytes: Uint8Array): void {
 // (no funciona contra localhost salvo que esté en la misma red).
 function printViaBrowserPrint(ventaId: number): void {
 	const base = import.meta.env.PUBLIC_API_URL;
-	window.location.href = `bprint://${base}/ventas/${ventaId}/ticket-thermer`;
+	const responseUrl = `${base}/ventas/${ventaId}/ticket-thermer`;
+	window.location.href = `bprint://${encodeURIComponent(responseUrl)}`;
 }
 
 export async function printTicket(venta: Venta): Promise<void> {
