@@ -179,41 +179,84 @@ function backToTables() {
 function addToCart(productoId: number) {
 	const orden = getActiveOrden();
 	if (!orden) return;
+
+	const existing = orden.items.find((i) => i.producto_id === productoId);
+	if (existing) existing.cantidad += 1;
+	else orden.items.push({ producto_id: productoId, cantidad: 1 });
+	renderBuilder();
+
 	return withBusy(async () => {
-		await api.ordenes.agregarItem(orden.id, productoId, 1);
-		await refreshOrdenes();
-		renderBuilder();
+		try {
+			await api.ordenes.agregarItem(orden.id, productoId, 1);
+		} catch (err) {
+			if (existing) existing.cantidad -= 1;
+			else orden.items = orden.items.filter((i) => i.producto_id !== productoId);
+			renderBuilder();
+			throw err;
+		}
 	});
 }
 
 function changeQty(productoId: number, delta: number) {
 	const orden = getActiveOrden();
 	if (!orden) return;
+	const item = orden.items.find((i) => i.producto_id === productoId);
+	if (!item) return;
+
+	const previousCantidad = item.cantidad;
+	item.cantidad += delta;
+	if (item.cantidad <= 0) orden.items = orden.items.filter((i) => i.producto_id !== productoId);
+	renderBuilder();
+
 	return withBusy(async () => {
-		await api.ordenes.cambiarCantidad(orden.id, productoId, delta);
-		await refreshOrdenes();
-		renderBuilder();
+		try {
+			await api.ordenes.cambiarCantidad(orden.id, productoId, delta);
+		} catch (err) {
+			if (previousCantidad + delta <= 0) orden.items.push({ producto_id: productoId, cantidad: previousCantidad });
+			else item.cantidad = previousCantidad;
+			renderBuilder();
+			throw err;
+		}
 	});
 }
 
 function removeItem(productoId: number) {
 	const orden = getActiveOrden();
 	if (!orden) return;
+	const index = orden.items.findIndex((i) => i.producto_id === productoId);
+	if (index === -1) return;
+
+	const [removed] = orden.items.splice(index, 1);
+	renderBuilder();
+
 	return withBusy(async () => {
-		await api.ordenes.quitarItem(orden.id, productoId);
-		await refreshOrdenes();
-		renderBuilder();
+		try {
+			await api.ordenes.quitarItem(orden.id, productoId);
+		} catch (err) {
+			orden.items.splice(index, 0, removed);
+			renderBuilder();
+			throw err;
+		}
 	});
 }
 
 function clearOrder() {
 	const orden = getActiveOrden();
 	if (!orden || orden.items.length === 0) return;
+
+	const previousItems = orden.items;
+	orden.items = [];
+	renderBuilder();
+
 	return withBusy(async () => {
-		await api.ordenes.vaciar(orden.id);
-		await refreshOrdenes();
-		renderBuilder();
-		showToast(`${orden.etiqueta} vaciada`);
+		try {
+			await api.ordenes.vaciar(orden.id);
+			showToast(`${orden.etiqueta} vaciada`);
+		} catch (err) {
+			orden.items = previousItems;
+			renderBuilder();
+			throw err;
+		}
 	});
 }
 

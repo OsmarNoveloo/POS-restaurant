@@ -5,6 +5,14 @@ import type { Producto, ProductoInput } from '../types/api';
 
 type Filtro = 'todos' | 'activos' | 'inactivos';
 
+const EMOJI_OPTIONS = [
+	'🌮', '🌯', '🫔', '🥙', '🍔', '🌭', '🍕', '🍗', '🍖', '🥩',
+	'🍳', '🥗', '🍲', '🍜', '🍛', '🍱', '🍣', '🍤', '🥟', '🌽',
+	'🧀', '🥑', '🍞', '🥐', '🍰', '🧁', '🍩', '🍪', '🍫', '🍦',
+	'🍨', '🥤', '🧃', '☕', '🍺', '🍷', '🍹', '🥃', '🍽️', '🍴',
+	'🥄', '🔥', '🧂',
+];
+
 const state = {
 	productos: [] as Producto[],
 	filtro: 'todos' as Filtro,
@@ -19,8 +27,12 @@ const el = {
 	nombre: $<HTMLInputElement>('nombre'),
 	precio: $<HTMLInputElement>('precio'),
 	categoria: $<HTMLInputElement>('categoria'),
-	categoriaOptions: $<HTMLDataListElement>('categoriaOptions'),
+	categoriaSelect: $<HTMLElement>('categoriaSelect'),
+	categoriaDropdown: $<HTMLElement>('categoriaDropdown'),
 	icono: $<HTMLInputElement>('icono'),
+	emojiSelect: $<HTMLDetailsElement>('emojiSelect'),
+	emojiPreview: $<HTMLElement>('emojiPreview'),
+	emojiPicker: $<HTMLElement>('emojiPicker'),
 	activo: $<HTMLInputElement>('activo'),
 	submitBtn: $<HTMLButtonElement>('submitProductoBtn'),
 	cancelEditBtn: $<HTMLButtonElement>('cancelEditBtn'),
@@ -59,9 +71,44 @@ async function refreshProductos() {
 
 // --- Rendering ---
 
-function renderCategoriaOptions() {
+function renderCategoriaDropdown() {
 	const categorias = [...new Set(state.productos.map((p) => p.categoria))].sort((a, b) => a.localeCompare(b));
-	el.categoriaOptions.innerHTML = categorias.map((c) => `<option value="${c}"></option>`).join('');
+	el.categoriaDropdown.innerHTML = categorias
+		.map((c) => `<button type="button" class="combo-option" data-categoria="${c}">${c}</button>`)
+		.join('');
+}
+
+function openCategoriaDropdown() {
+	if (!el.categoriaDropdown.children.length) return;
+	el.categoriaSelect.classList.add('open');
+}
+
+function closeCategoriaDropdown() {
+	el.categoriaSelect.classList.remove('open');
+}
+
+function renderEmojiPicker() {
+	const clearBtn = `<button type="button" class="emoji-option emoji-clear" data-emoji="" title="Quitar ícono">✕</button>`;
+	const optionButtons = EMOJI_OPTIONS.map(
+		(emoji) => `<button type="button" class="emoji-option" data-emoji="${emoji}">${emoji}</button>`,
+	).join('');
+	el.emojiPicker.innerHTML = clearBtn + optionButtons;
+	updateEmojiUI();
+}
+
+function updateEmojiUI() {
+	const value = el.icono.value;
+	el.emojiPreview.textContent = value || '🍽️';
+	el.emojiPreview.classList.toggle('empty', !value);
+	for (const btn of el.emojiPicker.querySelectorAll<HTMLButtonElement>('.emoji-option')) {
+		btn.classList.toggle('active', (btn.dataset.emoji ?? '') === value);
+	}
+}
+
+function selectEmoji(emoji: string) {
+	el.icono.value = emoji;
+	updateEmojiUI();
+	el.emojiSelect.open = false;
 }
 
 function filteredProductos(): Producto[] {
@@ -95,7 +142,7 @@ function renderTable() {
 }
 
 function renderAll() {
-	renderCategoriaOptions();
+	renderCategoriaDropdown();
 	renderTable();
 }
 
@@ -108,6 +155,8 @@ function resetForm() {
 	el.formTitle.textContent = 'Nuevo producto';
 	el.submitBtn.textContent = 'Agregar producto';
 	el.cancelEditBtn.hidden = true;
+	el.icono.value = '';
+	updateEmojiUI();
 }
 
 function startEdit(id: number) {
@@ -124,6 +173,7 @@ function startEdit(id: number) {
 	el.submitBtn.textContent = 'Guardar cambios';
 	el.cancelEditBtn.hidden = false;
 	el.nombre.focus();
+	updateEmojiUI();
 }
 
 function handleSubmit(e: SubmitEvent) {
@@ -193,6 +243,27 @@ function attachEvents() {
 	el.form.addEventListener('submit', handleSubmit);
 	el.cancelEditBtn.addEventListener('click', resetForm);
 
+	el.emojiPicker.addEventListener('click', (e) => {
+		const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.emoji-option');
+		if (!btn) return;
+		selectEmoji(btn.dataset.emoji ?? '');
+	});
+
+	el.categoria.addEventListener('focus', openCategoriaDropdown);
+	el.categoria.addEventListener('click', openCategoriaDropdown);
+
+	el.categoriaDropdown.addEventListener('click', (e) => {
+		const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.combo-option');
+		if (!btn || !btn.dataset.categoria) return;
+		el.categoria.value = btn.dataset.categoria;
+		closeCategoriaDropdown();
+	});
+
+	document.addEventListener('click', (e) => {
+		if (el.emojiSelect.open && !el.emojiSelect.contains(e.target as Node)) el.emojiSelect.open = false;
+		if (!el.categoriaSelect.contains(e.target as Node)) closeCategoriaDropdown();
+	});
+
 	el.activoFilters.addEventListener('click', (e) => {
 		const chip = (e.target as HTMLElement).closest<HTMLElement>('.category-chip');
 		if (!chip || !chip.dataset.filter) return;
@@ -226,6 +297,7 @@ async function init() {
 	try {
 		await refreshProductos();
 		renderAll();
+		renderEmojiPicker();
 		attachEvents();
 	} catch (err) {
 		console.error(err);

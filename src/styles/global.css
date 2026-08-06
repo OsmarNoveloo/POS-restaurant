@@ -894,7 +894,7 @@ a.btn {
 .producto-form {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-	gap: 1rem;
+	gap: 2rem;
 	align-items: end;
 }
 
@@ -918,6 +918,10 @@ a.btn {
 	font-size: 0.9rem;
 	font-family: inherit;
 	color: var(--ink);
+	min-width: 0;
+	width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .form-field.checkbox-field {
@@ -942,6 +946,135 @@ a.btn {
 .producto-icon-cell {
 	font-size: 1.2rem;
 	width: 1.6rem;
+}
+
+.emoji-select {
+	position: relative;
+}
+
+.emoji-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 0.55rem 0.75rem;
+	border-radius: 8px;
+	border: 1px solid var(--cream-dark);
+	background: #fff;
+	cursor: pointer;
+	list-style: none;
+}
+
+.emoji-trigger::-webkit-details-marker {
+	display: none;
+}
+
+.emoji-trigger::marker {
+	content: '';
+}
+
+.emoji-preview {
+	font-size: 1.2rem;
+	line-height: 1;
+}
+
+.emoji-preview.empty {
+	opacity: 0.5;
+}
+
+.emoji-caret {
+	font-size: 0.7rem;
+	color: var(--muted);
+}
+
+.emoji-select[open] .emoji-trigger {
+	border-color: var(--brick);
+}
+
+.emoji-dropdown {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 0.3rem);
+	left: 0;
+	width: min(280px, calc(100vw - 2.5rem));
+	max-height: min(260px, calc(100vh - 12rem));
+	overflow-y: auto;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+	gap: 0.35rem;
+	padding: 0.6rem;
+	background: #fff;
+	border: 1px solid var(--cream-dark);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+}
+
+.emoji-option {
+	font-size: 1.15rem;
+	line-height: 1;
+	aspect-ratio: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	cursor: pointer;
+}
+
+.emoji-option:hover {
+	background: var(--cream);
+}
+
+.emoji-option.active {
+	border-color: var(--brick);
+	background: rgba(164, 50, 42, 0.12);
+}
+
+.emoji-clear {
+	color: var(--muted);
+	border-style: dashed;
+}
+
+.combo-select {
+	position: relative;
+}
+
+.combo-dropdown {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 0.3rem);
+	left: 0;
+	right: 0;
+	max-height: 220px;
+	overflow-y: auto;
+	display: none;
+	flex-direction: column;
+	background: #fff;
+	border: 1px solid var(--cream-dark);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	padding: 0.3rem;
+}
+
+.combo-select.open .combo-dropdown {
+	display: flex;
+}
+
+.combo-option {
+	text-align: left;
+	padding: 0.45rem 0.6rem;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	font-size: 0.9rem;
+	color: var(--ink);
+	font-family: inherit;
+}
+
+.combo-option:hover {
+	background: var(--cream);
 }
 
 .status-badge.active {
@@ -1127,5 +1260,23 @@ a.btn {
 	.modal {
 		padding: 1.15rem;
 		width: min(340px, 92vw);
+	}
+
+	.producto-form {
+		grid-template-columns: 1fr;
+	}
+
+	.emoji-dropdown {
+		width: calc(100vw - 2.5rem);
+		grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+	}
+
+	.emoji-option {
+		font-size: 1.3rem;
+	}
+
+	.combo-option {
+		padding: 0.6rem 0.7rem;
+		font-size: 0.95rem;
 	}
 }

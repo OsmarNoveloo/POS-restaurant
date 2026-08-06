@@ -8,13 +8,13 @@ import '../styles/global.css';
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="generator" content={Astro.generator} />
-		<title>La Cocina · Productos</title>
+		<title>Rincon mexicano · Productos</title>
 	</head>
 	<body>
 		<header class="navbar">
 			<div class="brand">
 				<span class="brand-icon">🍽️</span>
-				<span class="brand-name">La Cocina <strong>Productos</strong></span>
+				<span class="brand-name">Rincon mexicano  <strong>Productos</strong></span>
 			</div>
 
 			<div class="navbar-actions">
@@ -44,12 +44,21 @@ import '../styles/global.css';
 					</div>
 					<div class="form-field">
 						<label for="categoria">Categoría</label>
-						<input id="categoria" name="categoria" type="text" required list="categoriaOptions" />
-						<datalist id="categoriaOptions"></datalist>
+						<div class="combo-select" id="categoriaSelect">
+							<input id="categoria" name="categoria" type="text" required autocomplete="off" placeholder="Elige o escribe…" />
+							<div class="combo-dropdown" id="categoriaDropdown"></div>
+						</div>
 					</div>
 					<div class="form-field">
-						<label for="icono">Icono (emoji)</label>
-						<input id="icono" name="icono" type="text" maxlength="4" placeholder="🍽️" />
+						<label for="emojiTrigger">Icono (emoji)</label>
+						<details class="emoji-select" id="emojiSelect">
+							<summary class="emoji-trigger" id="emojiTrigger">
+								<span class="emoji-preview empty" id="emojiPreview">🍽️</span>
+								<span class="emoji-caret">▾</span>
+							</summary>
+							<div class="emoji-dropdown" id="emojiPicker"></div>
+						</details>
+						<input id="icono" name="icono" type="hidden" />
 					</div>
 					<div class="form-field checkbox-field">
 						<label><input id="activo" name="activo" type="checkbox" checked /> Activo</label>
