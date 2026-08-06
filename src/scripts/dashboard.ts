@@ -138,13 +138,18 @@ function renderSalesLog() {
 	}
 }
 
-function reprintVenta(ventaId: number) {
+function reprintVenta(btn: HTMLButtonElement, ventaId: number) {
 	const venta = state.ventas.find((v) => v.id === ventaId);
-	if (!venta) return;
-	printTicket(venta).catch((err) => {
-		console.error(err);
-		window.alert(errorMessage(err));
-	});
+	if (!venta || btn.disabled) return;
+	btn.disabled = true;
+	printTicket(venta)
+		.catch((err) => {
+			console.error(err);
+			window.alert(errorMessage(err));
+		})
+		.finally(() => {
+			btn.disabled = false;
+		});
 }
 
 function renderAll() {
@@ -173,7 +178,7 @@ function attachEvents() {
 	el.salesLogBody.addEventListener('click', (e) => {
 		const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.print-btn');
 		if (!btn?.dataset.ventaId) return;
-		reprintVenta(Number(btn.dataset.ventaId));
+		reprintVenta(btn, Number(btn.dataset.ventaId));
 	});
 }
 

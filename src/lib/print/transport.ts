@@ -9,18 +9,37 @@ export function isAndroid(): boolean {
 	return /Android/i.test(navigator.userAgent);
 }
 
-async function getOrRequestSerialPort(): Promise<SerialPort> {
+async function openKnownPort(): Promise<SerialPort | null> {
+	const known = await navigator.serial!.getPorts();
+
+	// Windows puede acumular varias instancias del mismo puerto físico (p. ej.
+	// tras reconectar el cable o reinstalar el driver), y no todas son válidas
+	// para abrir. Se intenta cada una hasta encontrar la que sigue conectada.
+	for (const port of known) {
+		try {
+			await port.open({ baudRate: 9600 });
+			return port;
+		} catch {
+			// Puerto obsoleto/desconectado: se prueba el siguiente.
+		}
+	}
+	return null;
+}
+
+async function getOpenSerialPort(): Promise<SerialPort> {
 	const serial = navigator.serial;
 	if (!serial) throw new Error('Este navegador no soporta Web Serial');
 
-	const known = await serial.getPorts();
-	if (known.length > 0) return known[0];
-	return serial.requestPort();
+	const opened = await openKnownPort();
+	if (opened) return opened;
+
+	const port = await serial.requestPort();
+	await port.open({ baudRate: 9600 });
+	return port;
 }
 
 async function printViaSerial(bytes: Uint8Array): Promise<void> {
-	const port = await getOrRequestSerialPort();
-	await port.open({ baudRate: 9600 });
+	const port = await getOpenSerialPort();
 
 	const writer = port.writable?.getWriter();
 	if (!writer) throw new Error('No se pudo abrir el puerto de la impresora');
