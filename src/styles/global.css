@@ -247,6 +247,15 @@ button {
 	color: var(--cream);
 }
 
+.btn.success {
+	background: var(--success);
+	color: #fff;
+}
+
+.btn.success:hover {
+	background: #3d723c;
+}
+
 a.btn {
 	text-decoration: none;
 	display: inline-flex;
