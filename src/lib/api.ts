@@ -6,6 +6,7 @@ import type {
 	ProductoInput,
 	ProductoUpdateInput,
 	ResumenDashboard,
+	ThermerEntry,
 	Venta,
 	VentaInput,
 } from '../types/api';
@@ -97,6 +98,9 @@ export const ventas = {
 	},
 	crear(input: VentaInput): Promise<Venta> {
 		return request('/ventas', { method: 'POST', ...json(input) });
+	},
+	ticketThermer(id: number): Promise<ThermerEntry[]> {
+		return request(`/ventas/${id}/ticket-thermer`);
 	},
 };
 

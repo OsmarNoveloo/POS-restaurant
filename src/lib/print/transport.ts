@@ -1,3 +1,4 @@
+import { ventas } from '../api';
 import type { Venta } from '../../types/api';
 import { buildTicket } from './escpos';
 
@@ -65,21 +66,20 @@ function printViaRawBT(bytes: Uint8Array): void {
 }
 
 // La app Bluetooth Print (Thermer) en iOS no acepta bytes ESC/POS embebidos en la
-// URL: al abrir `bprint://<RESPONSEURL>` es la propia app la que hace un GET a esa
-// URL y espera un arreglo JSON de entradas (texto/imagen/barcode/QR). Por eso aquí
-// solo se le indica al backend qué venta imprimir; el ticket se arma del lado del
-// servidor en /ventas/:id/ticket-thermer. Requiere haber activado "Browser Print"
-// en los ajustes de la app y que PUBLIC_API_URL sea accesible desde el celular
-// (no funciona contra localhost salvo que esté en la misma red).
-function printViaBrowserPrint(ventaId: number): void {
-	const base = import.meta.env.PUBLIC_API_URL;
-	const responseUrl = `${base}/ventas/${ventaId}/ticket-thermer`;
-	window.location.href = `bprint://${encodeURIComponent(responseUrl)}`;
+// URL. Su esquema es `thermer://?data=<JSON percent-encoded>` (ver
+// github.com/tussharmate/ios-thermer-custom-schema): el arreglo de entradas
+// (texto/imagen/barcode/QR) va directo en el query param, no se le pasa una URL
+// para que la app la vaya a buscar. El ticket se arma del lado del servidor en
+// /ventas/:id/ticket-thermer y aquí solo se reenvía embebido en el deep link.
+async function printViaBrowserPrint(ventaId: number): Promise<void> {
+	const entries = await ventas.ticketThermer(ventaId);
+	const data = encodeURIComponent(JSON.stringify(entries));
+	window.location.href = `thermer://?data=${data}`;
 }
 
 export async function printTicket(venta: Venta): Promise<void> {
 	if (isIOS()) {
-		printViaBrowserPrint(venta.id);
+		await printViaBrowserPrint(venta.id);
 		return;
 	}
 
