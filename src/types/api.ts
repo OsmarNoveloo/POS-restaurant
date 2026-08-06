@@ -71,14 +71,6 @@ export interface VentaInput {
 	recibido?: number;
 }
 
-export interface ThermerEntry {
-	type: number;
-	content: string;
-	bold: number;
-	align: number;
-	format: number;
-}
-
 export interface ResumenDashboard {
 	ventasDelDia: number;
 	ordenesCobradas: number;

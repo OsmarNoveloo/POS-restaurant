@@ -1,4 +1,3 @@
-import { ventas } from '../api';
 import type { Venta } from '../../types/api';
 import { buildTicket } from './escpos';
 
@@ -58,38 +57,29 @@ async function printViaSerial(bytes: Uint8Array): Promise<void> {
 	}
 }
 
-function printViaRawBT(bytes: Uint8Array): void {
+function toBase64(bytes: Uint8Array): string {
 	let binary = '';
 	for (const byte of bytes) binary += String.fromCharCode(byte);
-	const base64 = btoa(binary);
-	window.location.href = `rawbt:base64,${base64}`;
+	return btoa(binary);
 }
 
-// La app Bluetooth Print (Thermer) en iOS no acepta bytes ESC/POS embebidos en la
-// URL. Su esquema es `thermer://?data=<JSON percent-encoded>` (ver
-// github.com/tussharmate/ios-thermer-custom-schema), y el demo oficial codifica
-// las entradas como `[Int: PrintEntry]`: un diccionario Swift indexado, que
-// JSONEncoder serializa como objeto `{"0": {...}, "1": {...}}`, no como arreglo.
-// El ticket se arma del lado del servidor en /ventas/:id/ticket-thermer (como
-// arreglo) y aquí se reindexa antes de mandarlo embebido en el deep link. Thermer
-// ordena las llaves del diccionario como texto, no como número (así, "10" queda
-// antes que "2"), así que se rellenan con ceros a la izquierda para que el orden
-// alfabético coincida con el orden numérico real de las entradas.
-async function printViaBrowserPrint(ventaId: number): Promise<void> {
-	const entries = await ventas.ticketThermer(ventaId);
-	const width = String(entries.length - 1).length;
-	const indexed = Object.fromEntries(entries.map((entry, i) => [String(i).padStart(width, '0'), entry]));
-	const data = encodeURIComponent(JSON.stringify(indexed));
-	window.location.href = `thermer://?data=${data}`;
+function printViaRawBT(bytes: Uint8Array): void {
+	window.location.href = `rawbt:base64,${toBase64(bytes)}`;
+}
+
+// La app propia rincon-mx-print-ios recibe los mismos bytes ESC/POS que RawBT,
+// solo que embebidos en su propio esquema de deep link en vez de un intent Android.
+function printViaCustomScheme(bytes: Uint8Array): void {
+	window.location.href = `rinconprint://print?data=${encodeURIComponent(toBase64(bytes))}`;
 }
 
 export async function printTicket(venta: Venta): Promise<void> {
+	const bytes = buildTicket(venta);
+
 	if (isIOS()) {
-		await printViaBrowserPrint(venta.id);
+		printViaCustomScheme(bytes);
 		return;
 	}
-
-	const bytes = buildTicket(venta);
 
 	if (isAndroid()) {
 		printViaRawBT(bytes);
@@ -101,5 +91,5 @@ export async function printTicket(venta: Venta): Promise<void> {
 		return;
 	}
 
-	throw new Error('Impresión no soportada en este navegador. Usa Chrome/Edge en PC, Android con RawBT o iPhone con Bluetooth Print (Thermer) instalados.');
+	throw new Error('Impresión no soportada en este navegador. Usa Chrome/Edge en PC, Android con RawBT o iPhone con la app Rincon Print instalados.');
 }
