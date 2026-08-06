@@ -402,7 +402,7 @@ function confirmPayment() {
 	}
 
 	return withBusy(async () => {
-		const venta = await api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo' });
+		const venta = await api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo', recibido: received });
 		state.lastVenta = venta;
 		await refreshOrdenes();
 		await refreshDailySales();

@@ -98,6 +98,10 @@ export function buildTicket(venta: Venta): Uint8Array {
 	w.raw(0x1b, 0x45, 0x00);
 
 	w.line(`Pago: ${venta.metodo_pago === 'efectivo' ? 'Efectivo' : 'Tarjeta'}`);
+	if (venta.metodo_pago === 'efectivo' && venta.recibido != null) {
+		w.line(padLine('Recibido', formatCurrency(venta.recibido), columns));
+		if (venta.cambio) w.line(padLine('Cambio', formatCurrency(venta.cambio), columns));
+	}
 	w.line();
 	w.raw(0x1b, 0x61, 0x01);
 	w.line('Gracias por su visita');

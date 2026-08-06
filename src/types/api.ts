@@ -59,6 +59,8 @@ export interface Venta {
 	subtotal: number;
 	impuesto: number;
 	total: number;
+	recibido: number | null;
+	cambio: number | null;
 	creado_en: string;
 	detalle: VentaDetalleItem[];
 }
@@ -66,6 +68,7 @@ export interface Venta {
 export interface VentaInput {
 	orden_id: number;
 	metodo_pago: MetodoPago;
+	recibido?: number;
 }
 
 export interface ResumenDashboard {
