@@ -1,6 +1,7 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
 import { computeTotals, errorMessage, formatCurrency, formatTime, ordenStatus } from '../lib/posHelpers';
+import { printTicket } from '../lib/print/transport';
 import type { Orden, Producto, ResumenDashboard, Venta } from '../types/api';
 
 const REFRESH_INTERVAL_MS = 15000;
@@ -128,9 +129,22 @@ function renderSalesLog() {
 		totalTd.className = 'align-right';
 		totalTd.textContent = formatCurrency(venta.total);
 
-		tr.append(timeTd, tableTd, itemsTd, paymentTd, totalTd);
+		const printTd = document.createElement('td');
+		printTd.className = 'align-right';
+		printTd.innerHTML = `<button class="print-btn" data-venta-id="${venta.id}" title="Imprimir ticket">🖨️</button>`;
+
+		tr.append(timeTd, tableTd, itemsTd, paymentTd, totalTd, printTd);
 		el.salesLogBody.appendChild(tr);
 	}
+}
+
+function reprintVenta(ventaId: number) {
+	const venta = state.ventas.find((v) => v.id === ventaId);
+	if (!venta) return;
+	printTicket(venta).catch((err) => {
+		console.error(err);
+		window.alert(errorMessage(err));
+	});
 }
 
 function renderAll() {
@@ -155,7 +169,16 @@ async function loadData() {
 	state.productos = productos;
 }
 
+function attachEvents() {
+	el.salesLogBody.addEventListener('click', (e) => {
+		const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.print-btn');
+		if (!btn?.dataset.ventaId) return;
+		reprintVenta(Number(btn.dataset.ventaId));
+	});
+}
+
 async function init() {
+	attachEvents();
 	try {
 		await loadData();
 		renderAll();

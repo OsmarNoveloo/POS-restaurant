@@ -890,6 +890,19 @@ a.btn {
 	text-align: right;
 }
 
+.print-btn {
+	background: none;
+	border: none;
+	color: var(--muted);
+	font-size: 1rem;
+	padding: 0.2rem;
+	cursor: pointer;
+}
+
+.print-btn:hover {
+	color: var(--ink);
+}
+
 /* Productos CRUD */
 .producto-form {
 	display: grid;

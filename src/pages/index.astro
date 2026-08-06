@@ -75,7 +75,7 @@ import '../styles/global.css';
 				<p class="modal-order-name" id="modalOrderName">Mesa 1</p>
 				<p class="modal-total" id="modalTotal">$0.00</p>
 
-				<div class="cash-fields">
+				<div class="cash-fields" id="cashFields">
 					<label for="cashReceived">Recibido</label>
 					<input type="number" id="cashReceived" min="0" step="0.01" placeholder="0.00" />
 					<div class="change-row">
@@ -87,6 +87,7 @@ import '../styles/global.css';
 				<div class="modal-actions">
 					<button id="cancelPaymentBtn" class="btn secondary">Cancelar</button>
 					<button id="confirmPaymentBtn" class="btn primary">Confirmar pago</button>
+					<button id="printTicketBtn" class="btn ghost" style="display: none">🖨️ Imprimir ticket</button>
 				</div>
 			</div>
 		</div>

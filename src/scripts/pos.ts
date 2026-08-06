@@ -1,7 +1,8 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
 import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency } from '../lib/posHelpers';
-import type { Orden, Producto } from '../types/api';
+import { printTicket } from '../lib/print/transport';
+import type { Orden, Producto, Venta } from '../types/api';
 
 const state = {
 	productos: [] as Producto[],
@@ -13,6 +14,7 @@ const state = {
 	skipRenameCommit: false,
 	pendingDeleteOrdenId: null as number | null,
 	busy: false,
+	lastVenta: null as Venta | null,
 };
 
 const el = {
@@ -31,10 +33,12 @@ const el = {
 	modal: $<HTMLElement>('paymentModal'),
 	modalOrderName: $<HTMLElement>('modalOrderName'),
 	modalTotal: $<HTMLElement>('modalTotal'),
+	cashFields: $<HTMLElement>('cashFields'),
 	cashReceived: $<HTMLInputElement>('cashReceived'),
 	changeAmount: $<HTMLElement>('changeAmount'),
 	cancelPaymentBtn: $<HTMLButtonElement>('cancelPaymentBtn'),
 	confirmPaymentBtn: $<HTMLButtonElement>('confirmPaymentBtn'),
+	printTicketBtn: $<HTMLButtonElement>('printTicketBtn'),
 	confirmModal: $<HTMLElement>('confirmModal'),
 	confirmMessage: $<HTMLElement>('confirmMessage'),
 	confirmCancelBtn: $<HTMLButtonElement>('confirmCancelBtn'),
@@ -371,6 +375,10 @@ function openPaymentModal() {
 
 function closePaymentModal() {
 	el.modal.classList.remove('open');
+	el.cashFields.style.display = '';
+	el.confirmPaymentBtn.style.display = '';
+	el.printTicketBtn.style.display = 'none';
+	el.cancelPaymentBtn.textContent = 'Cancelar';
 }
 
 function updateChange() {
@@ -395,11 +403,25 @@ function confirmPayment() {
 
 	return withBusy(async () => {
 		const venta = await api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo' });
+		state.lastVenta = venta;
 		await refreshOrdenes();
 		await refreshDailySales();
-		closePaymentModal();
 		renderCart();
+
+		el.cashFields.style.display = 'none';
+		el.confirmPaymentBtn.style.display = 'none';
+		el.printTicketBtn.style.display = '';
+		el.cancelPaymentBtn.textContent = 'Cerrar';
+
 		showToast(`Pago de ${formatCurrency(venta.total)} confirmado — ${venta.orden_etiqueta}`);
+	});
+}
+
+function printLastTicket() {
+	if (!state.lastVenta) return;
+	return withBusy(async () => {
+		await printTicket(state.lastVenta!);
+		showToast('Ticket enviado a la impresora');
 	});
 }
 
@@ -476,6 +498,7 @@ function attachEvents() {
 	el.chargeBtn.addEventListener('click', openPaymentModal);
 	el.cancelPaymentBtn.addEventListener('click', closePaymentModal);
 	el.confirmPaymentBtn.addEventListener('click', confirmPayment);
+	el.printTicketBtn.addEventListener('click', printLastTicket);
 	el.cashReceived.addEventListener('input', updateChange);
 
 	el.modal.addEventListener('click', (e) => {
