@@ -9,6 +9,11 @@ export function isAndroid(): boolean {
 	return /Android/i.test(navigator.userAgent);
 }
 
+export function isIOS(): boolean {
+	// iPadOS se anuncia como Macintosh pero expone soporte táctil, a diferencia de un Mac real.
+	return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 async function openKnownPort(): Promise<SerialPort | null> {
 	const known = await navigator.serial!.getPorts();
 
@@ -59,7 +64,24 @@ function printViaRawBT(bytes: Uint8Array): void {
 	window.location.href = `rawbt:base64,${base64}`;
 }
 
+// La app Bluetooth Print (Thermer) en iOS no acepta bytes ESC/POS embebidos en la
+// URL: al abrir `bprint://<RESPONSEURL>` es la propia app la que hace un GET a esa
+// URL y espera un arreglo JSON de entradas (texto/imagen/barcode/QR). Por eso aquí
+// solo se le indica al backend qué venta imprimir; el ticket se arma del lado del
+// servidor en /ventas/:id/ticket-thermer. Requiere haber activado "Browser Print"
+// en los ajustes de la app y que PUBLIC_API_URL sea accesible desde el celular
+// (no funciona contra localhost salvo que esté en la misma red).
+function printViaBrowserPrint(ventaId: number): void {
+	const base = import.meta.env.PUBLIC_API_URL;
+	window.location.href = `bprint://${base}/ventas/${ventaId}/ticket-thermer`;
+}
+
 export async function printTicket(venta: Venta): Promise<void> {
+	if (isIOS()) {
+		printViaBrowserPrint(venta.id);
+		return;
+	}
+
 	const bytes = buildTicket(venta);
 
 	if (isAndroid()) {
@@ -72,5 +94,5 @@ export async function printTicket(venta: Venta): Promise<void> {
 		return;
 	}
 
-	throw new Error('Impresión no soportada en este navegador. Usa Chrome/Edge en PC o Android con RawBT instalado.');
+	throw new Error('Impresión no soportada en este navegador. Usa Chrome/Edge en PC, Android con RawBT o iPhone con Bluetooth Print (Thermer) instalados.');
 }
