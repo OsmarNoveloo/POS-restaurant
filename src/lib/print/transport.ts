@@ -71,10 +71,14 @@ function printViaRawBT(bytes: Uint8Array): void {
 // las entradas como `[Int: PrintEntry]`: un diccionario Swift indexado, que
 // JSONEncoder serializa como objeto `{"0": {...}, "1": {...}}`, no como arreglo.
 // El ticket se arma del lado del servidor en /ventas/:id/ticket-thermer (como
-// arreglo) y aquí se reindexa antes de mandarlo embebido en el deep link.
+// arreglo) y aquí se reindexa antes de mandarlo embebido en el deep link. Thermer
+// ordena las llaves del diccionario como texto, no como número (así, "10" queda
+// antes que "2"), así que se rellenan con ceros a la izquierda para que el orden
+// alfabético coincida con el orden numérico real de las entradas.
 async function printViaBrowserPrint(ventaId: number): Promise<void> {
 	const entries = await ventas.ticketThermer(ventaId);
-	const indexed = Object.fromEntries(entries.map((entry, i) => [i, entry]));
+	const width = String(entries.length - 1).length;
+	const indexed = Object.fromEntries(entries.map((entry, i) => [String(i).padStart(width, '0'), entry]));
 	const data = encodeURIComponent(JSON.stringify(indexed));
 	window.location.href = `thermer://?data=${data}`;
 }
