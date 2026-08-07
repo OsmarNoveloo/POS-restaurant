@@ -76,13 +76,14 @@ export function buildTicket(venta: Venta): Uint8Array {
 	const w = new TicketWriter();
 
 	w.raw(0x1b, 0x40); // init
-	w.raw(0x1b, 0x61, 0x01); // center align
+	// La MP210 no siempre respeta el comando de alineación (ESC a); se centra
+	// el encabezado a mano rellenando con espacios para que salga centrado sin
+	// depender de que la impresora lo soporte.
 	w.raw(0x1b, 0x45, 0x01); // bold on
 	w.line(center(businessName, columns));
 	w.raw(0x1b, 0x45, 0x00); // bold off
-	w.line(venta.orden_etiqueta);
-	w.line(formatTicketDate(venta.creado_en));
-	w.raw(0x1b, 0x61, 0x00); // left align
+	w.line(center(venta.orden_etiqueta, columns));
+	w.line(center(formatTicketDate(venta.creado_en), columns));
 	w.line(divider(columns));
 
 	for (const item of venta.detalle) {
@@ -103,10 +104,11 @@ export function buildTicket(venta: Venta): Uint8Array {
 		if (venta.cambio) w.line(padLine('Cambio', formatCurrency(venta.cambio), columns));
 	}
 	w.line();
-	w.raw(0x1b, 0x61, 0x01);
-	w.line('Gracias por su visita');
-	w.raw(0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a);
-	w.raw(0x1d, 0x56, 0x00); // corte de papel
+	w.line(center('Gracias por su compra ...!', columns));
+	// La MP210 no tiene cuchilla; mandarle el comando de corte (GS V) puede hacer
+	// que truene el buzzer de error y tire la conexión. En vez de cortar, se deja
+	// bastante espacio en blanco para arrancar el ticket a mano sin perder texto.
+	w.raw(0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a);
 
 	return w.toBytes();
 }
