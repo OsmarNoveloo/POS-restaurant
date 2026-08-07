@@ -22,19 +22,60 @@ export class ApiError extends Error {
 	}
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-	const res = await fetch(`${BASE_URL}${path}`, {
-		headers: { 'Content-Type': 'application/json' },
-		...init,
-	});
+const REQUEST_TIMEOUT_MS = 8000;
+const RETRY_DELAYS_MS = [500, 1500];
 
-	if (!res.ok) {
-		const body = await res.json().catch(() => null);
-		throw new ApiError(body?.error ?? `Error ${res.status}`, res.status);
+function isTransientStatus(status: number): boolean {
+	return status === 502 || status === 503 || status === 504;
+}
+
+function delay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function attempt<T>(path: string, init?: RequestInit): Promise<T> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+	try {
+		const res = await fetch(`${BASE_URL}${path}`, {
+			headers: { 'Content-Type': 'application/json' },
+			...init,
+			signal: controller.signal,
+		});
+
+		if (!res.ok) {
+			const body = await res.json().catch(() => null);
+			throw new ApiError(body?.error ?? `Error ${res.status}`, res.status);
+		}
+
+		if (res.status === 204) return undefined as T;
+		return (await res.json()) as T;
+	} finally {
+		clearTimeout(timeout);
 	}
+}
 
-	if (res.status === 204) return undefined as T;
-	return res.json() as Promise<T>;
+// Las lecturas (GET) son seguras de reintentar automáticamente: nunca
+// duplican nada. Las escrituras (POST/PUT/PATCH/DELETE) sólo se intentan una
+// vez aquí — reintentarlas a ciegas podría duplicar una orden o un producto
+// agregado al carrito si el timeout ocurre después de que el servidor ya
+// procesó la petición. Su resiliencia ante fallas de red viene de la cola
+// offline (src/lib/offline/queue.ts), que reintenta exactamente una operación
+// encolada en vez de repetir la petición original sin control.
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+	const method = init?.method ?? 'GET';
+	if (method !== 'GET') return attempt<T>(path, init);
+
+	for (let retriesLeft = RETRY_DELAYS_MS.length; ; retriesLeft--) {
+		try {
+			return await attempt<T>(path, init);
+		} catch (err) {
+			const transient = !(err instanceof ApiError) || isTransientStatus(err.status);
+			if (!transient || retriesLeft <= 0) throw err;
+			await delay(RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - retriesLeft]);
+		}
+	}
 }
 
 function json(body: unknown): RequestInit {

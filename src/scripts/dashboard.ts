@@ -2,6 +2,7 @@ import { $ } from '../lib/dom';
 import * as api from '../lib/api';
 import { computeTotals, errorMessage, formatCurrency, formatTime, ordenStatus } from '../lib/posHelpers';
 import { printTicket } from '../lib/print/transport';
+import { cachedRead } from '../lib/offline/cache';
 import type { Orden, Producto, ResumenDashboard, Venta } from '../types/api';
 
 const REFRESH_INTERVAL_MS = 15000;
@@ -11,6 +12,7 @@ const state = {
 	ordenes: [] as Orden[],
 	ventas: [] as Venta[],
 	resumen: null as ResumenDashboard | null,
+	stale: false,
 };
 
 const el = {
@@ -18,6 +20,7 @@ const el = {
 	statOrderCount: $<HTMLElement>('statOrderCount'),
 	statAvgTicket: $<HTMLElement>('statAvgTicket'),
 	statActiveTables: $<HTMLElement>('statActiveTables'),
+	connectionStatus: $<HTMLElement>('connectionStatus'),
 	categoryChart: $<HTMLElement>('categoryChart'),
 	categoryChartEmpty: $<HTMLElement>('categoryChartEmpty'),
 	liveTables: $<HTMLElement>('liveTables'),
@@ -43,6 +46,11 @@ function colorForCategory(category: string): string {
 }
 
 // --- Rendering ---
+
+function renderConnectionBadge() {
+	el.connectionStatus.hidden = !state.stale;
+	if (state.stale) el.connectionStatus.textContent = '🔴 Sin conexión · mostrando datos guardados';
+}
 
 function renderStats() {
 	const resumen = state.resumen;
@@ -114,7 +122,7 @@ function renderSalesLog() {
 	el.salesTableWrap.style.display = state.ventas.length ? 'block' : 'none';
 
 	for (const venta of state.ventas) {
-		const itemCount = venta.detalle.reduce((sum, item) => sum + item.cantidad, 0);
+		const detalleTexto = venta.detalle.map((item) => `${item.cantidad}x ${item.producto_nombre}`).join(', ');
 		const tr = document.createElement('tr');
 
 		const timeTd = document.createElement('td');
@@ -122,7 +130,9 @@ function renderSalesLog() {
 		const tableTd = document.createElement('td');
 		tableTd.textContent = venta.orden_etiqueta;
 		const itemsTd = document.createElement('td');
-		itemsTd.textContent = `${itemCount} producto${itemCount === 1 ? '' : 's'}`;
+		itemsTd.className = 'items-cell';
+		itemsTd.textContent = detalleTexto;
+		itemsTd.title = detalleTexto;
 		const paymentTd = document.createElement('td');
 		paymentTd.textContent = venta.metodo_pago === 'efectivo' ? '💵 Efectivo' : '💳 Tarjeta';
 		const totalTd = document.createElement('td');
@@ -153,6 +163,7 @@ function reprintVenta(btn: HTMLButtonElement, ventaId: number) {
 }
 
 function renderAll() {
+	renderConnectionBadge();
 	renderStats();
 	renderCategoryChart();
 	renderLiveTables();
@@ -163,15 +174,16 @@ function renderAll() {
 
 async function loadData() {
 	const [resumen, ventas, ordenes, productos] = await Promise.all([
-		api.dashboard.resumen(),
-		api.ventas.listar(),
-		api.ordenes.listar(),
-		api.productos.listar(true),
+		cachedRead('resumen', () => api.dashboard.resumen()),
+		cachedRead('ventas', () => api.ventas.listar()),
+		cachedRead('ordenes', () => api.ordenes.listar()),
+		cachedRead('productos', () => api.productos.listar(true)),
 	]);
-	state.resumen = resumen;
-	state.ventas = ventas;
-	state.ordenes = ordenes;
-	state.productos = productos;
+	state.resumen = resumen.data;
+	state.ventas = ventas.data;
+	state.ordenes = ordenes.data;
+	state.productos = productos.data;
+	state.stale = resumen.stale || ventas.stale || ordenes.stale || productos.stale;
 }
 
 function attachEvents() {
@@ -191,9 +203,11 @@ async function init() {
 		console.error(err);
 		el.categoryChartEmpty.textContent = errorMessage(err);
 		el.categoryChartEmpty.style.display = 'block';
-		return;
 	}
 
+	// Programado siempre, incluso si la primera carga falló del todo (sin
+	// internet y sin caché previo): así el dashboard se recupera solo en
+	// cuanto vuelva la conexión, en vez de quedarse atorado hasta recargar.
 	setInterval(async () => {
 		try {
 			await loadData();

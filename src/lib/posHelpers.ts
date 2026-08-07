@@ -19,6 +19,14 @@ export function findProducto(productos: Producto[], productoId: number): Product
 	return productos.find((p) => p.id === productoId);
 }
 
+// Quita acentos y mayúsculas para que buscar "limon" también encuentre "Limón".
+export function normalizeSearch(text: string): string {
+	return text
+		.normalize('NFD')
+		.replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+		.toLowerCase();
+}
+
 export function computeTotals(items: OrdenItem[], productos: Producto[]): { subtotal: number; total: number } {
 	const subtotal = items.reduce((sum, item) => {
 		const producto = findProducto(productos, item.producto_id);

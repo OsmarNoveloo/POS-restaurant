@@ -1,13 +1,26 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
-import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency } from '../lib/posHelpers';
+import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency, normalizeSearch } from '../lib/posHelpers';
 import { printTicket } from '../lib/print/transport';
+import { cachedRead } from '../lib/offline/cache';
+import { isOnline, onStatusChange } from '../lib/offline/network';
+import {
+	cancelPendingOrder,
+	isPendingSync,
+	nextTempId,
+	onResolved,
+	pendingCount,
+	pendingSalesTotal,
+	runOrEnqueue,
+	startAutoSync,
+} from '../lib/offline/queue';
 import type { Orden, Producto, Venta } from '../types/api';
 
 const state = {
 	productos: [] as Producto[],
 	categorias: [] as string[],
 	selectedCategory: 'Todos',
+	searchQuery: '',
 	ordenes: [] as Orden[],
 	activeOrdenId: null as number | null,
 	editingOrdenId: null as number | null,
@@ -21,6 +34,9 @@ const el = {
 	orderTabs: $<HTMLElement>('orderTabs'),
 	newOrderBtn: $<HTMLButtonElement>('newOrderBtn'),
 	dailySales: $<HTMLElement>('dailySales'),
+	connectionStatus: $<HTMLElement>('connectionStatus'),
+	productSearch: $<HTMLInputElement>('productSearch'),
+	productSearchEmpty: $<HTMLElement>('productSearchEmpty'),
 	categoryFilters: $<HTMLElement>('categoryFilters'),
 	productGrid: $<HTMLElement>('productGrid'),
 	activeOrderName: $<HTMLElement>('activeOrderName'),
@@ -56,29 +72,52 @@ function showToast(message: string) {
 	setTimeout(() => el.toast.classList.remove('show'), 2200);
 }
 
-async function withBusy(fn: () => Promise<void>) {
-	if (state.busy) return;
-	state.busy = true;
-	try {
-		await fn();
-	} catch (err) {
-		console.error(err);
-		showToast(errorMessage(err));
-	} finally {
-		state.busy = false;
-	}
+// Encola las acciones en vez de descartarlas cuando ya hay una en curso: con
+// state.busy como simple bandera, tocar varios productos rápido hacía que
+// las peticiones de las siguientes se perdieran en silencio (el carrito local
+// ya mostraba el producto, pero nunca se mandaba al backend).
+let busyQueue: Promise<void> = Promise.resolve();
+
+function withBusy(fn: () => Promise<void>): Promise<void> {
+	const run = busyQueue.then(async () => {
+		state.busy = true;
+		try {
+			await fn();
+		} catch (err) {
+			console.error(err);
+			showToast(errorMessage(err));
+		} finally {
+			state.busy = false;
+		}
+	});
+	busyQueue = run;
+	return run;
 }
 
 async function refreshOrdenes() {
-	state.ordenes = await api.ordenes.listar();
+	const { data } = await cachedRead('ordenes', () => api.ordenes.listar());
+	// Las mesas creadas offline que todavía no se sincronizan no existen en el
+	// servidor todavía: se conservan aparte para no perderlas al refrescar.
+	const pending = state.ordenes.filter((o) => isPendingSync(o.id));
+	state.ordenes = [...data, ...pending];
 }
 
 async function refreshDailySales() {
-	const resumen = await api.dashboard.resumen();
-	el.dailySales.textContent = formatCurrency(resumen.ventasDelDia);
+	const { data } = await cachedRead('resumen', () => api.dashboard.resumen());
+	el.dailySales.textContent = formatCurrency(data.ventasDelDia + pendingSalesTotal());
 }
 
 // --- Rendering ---
+
+function renderConnectionBadge() {
+	const count = pendingCount();
+	const online = isOnline();
+	el.connectionStatus.hidden = online && count === 0;
+	if (el.connectionStatus.hidden) return;
+	el.connectionStatus.textContent = online
+		? `🟡 Sincronizando · ${count} pendiente${count === 1 ? '' : 's'}`
+		: `🔴 Sin conexión${count > 0 ? ` · ${count} pendiente${count === 1 ? '' : 's'}` : ''}`;
+}
 
 function renderOrderTabs() {
 	el.orderTabs.innerHTML = '';
@@ -94,8 +133,9 @@ function renderOrderTabs() {
 
 		const count = orden.items.reduce((sum, item) => sum + item.cantidad, 0);
 		const sentDot = orden.estado === 'enviada' ? '<span class="sent-dot" title="Enviada por mesero">●</span>' : '';
+		const pendingDot = isPendingSync(orden.id) ? '<span class="sent-dot" title="Sin sincronizar">🔴</span>' : '';
 		tab.innerHTML = `
-			<button class="order-tab-label" data-order-id="${orden.id}">${sentDot}${escapeHtml(orden.etiqueta)}${count > 0 ? `<span class="tab-count">(${count})</span>` : ''}</button>
+			<button class="order-tab-label" data-order-id="${orden.id}">${sentDot}${pendingDot}${escapeHtml(orden.etiqueta)}${count > 0 ? `<span class="tab-count">(${count})</span>` : ''}</button>
 			<button class="tab-edit" data-order-id="${orden.id}" title="Renombrar orden">✎</button>
 			${state.ordenes.length > 1 ? `<button class="tab-delete" data-order-id="${orden.id}" title="Eliminar orden">×</button>` : ''}
 		`;
@@ -125,10 +165,12 @@ function renderCategoryFilters() {
 
 function renderProductGrid() {
 	el.productGrid.innerHTML = '';
-	const productos =
-		state.selectedCategory === 'Todos'
-			? state.productos
-			: state.productos.filter((p) => p.categoria === state.selectedCategory);
+	const query = normalizeSearch(state.searchQuery.trim());
+	const productos = state.productos
+		.filter((p) => state.selectedCategory === 'Todos' || p.categoria === state.selectedCategory)
+		.filter((p) => !query || normalizeSearch(p.nombre).includes(query));
+
+	el.productSearchEmpty.hidden = productos.length > 0;
 
 	for (const producto of productos) {
 		const card = document.createElement('button');
@@ -145,6 +187,7 @@ function renderProductGrid() {
 
 function renderCart() {
 	const orden = getActiveOrden();
+	renderConnectionBadge();
 	if (!orden) return;
 
 	el.activeOrderName.textContent = orden.etiqueta;
@@ -198,7 +241,11 @@ function addToCart(productoId: number) {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.agregarItem(orden.id, productoId, 1);
+			await runOrEnqueue(
+				{ kind: 'agregar_item', payload: { ordenId: orden.id, productoId, cantidad: 1 } },
+				() => api.ordenes.agregarItem(orden.id, productoId, 1),
+				orden.id,
+			);
 		} catch (err) {
 			if (existing) existing.cantidad -= 1;
 			else orden.items = orden.items.filter((i) => i.producto_id !== productoId);
@@ -221,7 +268,11 @@ function changeQty(productoId: number, delta: number) {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.cambiarCantidad(orden.id, productoId, delta);
+			await runOrEnqueue(
+				{ kind: 'cambiar_cantidad', payload: { ordenId: orden.id, productoId, delta } },
+				() => api.ordenes.cambiarCantidad(orden.id, productoId, delta),
+				orden.id,
+			);
 		} catch (err) {
 			if (previousCantidad + delta <= 0) orden.items.push({ producto_id: productoId, cantidad: previousCantidad });
 			else item.cantidad = previousCantidad;
@@ -242,7 +293,11 @@ function removeItem(productoId: number) {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.quitarItem(orden.id, productoId);
+			await runOrEnqueue(
+				{ kind: 'quitar_item', payload: { ordenId: orden.id, productoId } },
+				() => api.ordenes.quitarItem(orden.id, productoId),
+				orden.id,
+			);
 		} catch (err) {
 			orden.items.splice(index, 0, removed);
 			renderCart();
@@ -261,7 +316,11 @@ function clearActiveOrder() {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.vaciar(orden.id);
+			await runOrEnqueue(
+				{ kind: 'vaciar_orden', payload: { ordenId: orden.id } },
+				() => api.ordenes.vaciar(orden.id),
+				orden.id,
+			);
 			showToast(`${orden.etiqueta} vaciada`);
 		} catch (err) {
 			orden.items = previousItems;
@@ -280,10 +339,23 @@ function switchOrder(ordenId: number) {
 
 function addNewOrder() {
 	const nextTableNumber = state.ordenes.filter((o) => o.etiqueta.startsWith('Mesa')).length + 1;
+	const etiqueta = `Mesa ${nextTableNumber}`;
+	const tempId = nextTempId();
+	const orden: Orden = { id: tempId, etiqueta, estado: null, creado_en: new Date().toISOString(), items: [] };
+	state.ordenes.push(orden);
+	switchOrder(tempId);
+
 	return withBusy(async () => {
-		const orden = await api.ordenes.crear({ etiqueta: `Mesa ${nextTableNumber}` });
-		state.ordenes.push(orden);
-		switchOrder(orden.id);
+		const created = await runOrEnqueue(
+			{ kind: 'crear_orden', payload: { tempId, etiqueta } },
+			() => api.ordenes.crear({ etiqueta }),
+		);
+		if (created) {
+			orden.id = created.id;
+			orden.creado_en = created.creado_en;
+			if (state.activeOrdenId === tempId) state.activeOrdenId = created.id;
+			renderCart();
+		}
 	});
 }
 
@@ -308,10 +380,22 @@ function commitRenameOrder(ordenId: number, value: string) {
 		return;
 	}
 
+	const previous = orden.etiqueta;
+	orden.etiqueta = trimmed;
+	renderCart();
+
 	return withBusy(async () => {
-		const updated = await api.ordenes.actualizar(ordenId, { etiqueta: trimmed });
-		orden.etiqueta = updated.etiqueta;
-		renderCart();
+		try {
+			await runOrEnqueue(
+				{ kind: 'actualizar_orden', payload: { ordenId, etiqueta: trimmed } },
+				() => api.ordenes.actualizar(ordenId, { etiqueta: trimmed }),
+				ordenId,
+			);
+		} catch (err) {
+			orden.etiqueta = previous;
+			renderCart();
+			throw err;
+		}
 	});
 }
 
@@ -344,7 +428,12 @@ function performDeleteOrder(ordenId: number) {
 	if (!orden) return;
 
 	return withBusy(async () => {
-		await api.ordenes.eliminar(ordenId);
+		if (isPendingSync(ordenId)) {
+			// Nunca llegó a existir en el servidor: no hay nada que eliminar ahí.
+			cancelPendingOrder(ordenId);
+		} else {
+			await runOrEnqueue({ kind: 'eliminar_orden', payload: { ordenId } }, () => api.ordenes.eliminar(ordenId), ordenId);
+		}
 		state.ordenes = state.ordenes.filter((o) => o.id !== ordenId);
 		if (state.activeOrdenId === ordenId) {
 			state.activeOrdenId = state.ordenes[0]?.id ?? null;
@@ -402,18 +491,57 @@ function confirmPayment() {
 	}
 
 	return withBusy(async () => {
-		const venta = await api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo', recibido: received });
-		state.lastVenta = venta;
-		await refreshOrdenes();
-		await refreshDailySales();
-		renderCart();
+		const tempId = nextTempId();
+		const detalle = orden.items.map((item) => {
+			const producto = findProducto(state.productos, item.producto_id);
+			return {
+				producto_nombre: producto?.nombre ?? 'Producto',
+				categoria: producto?.categoria ?? '',
+				cantidad: item.cantidad,
+				precio: producto?.precio ?? 0,
+			};
+		});
 
+		const venta = await runOrEnqueue(
+			{
+				kind: 'crear_venta',
+				payload: { tempId, ordenId: orden.id, metodoPago: 'efectivo', recibido: received, total },
+			},
+			() => api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo', recibido: received }),
+			orden.id,
+		);
+
+		if (venta) {
+			state.lastVenta = venta;
+			await refreshOrdenes();
+			await refreshDailySales();
+			showToast(`Pago de ${formatCurrency(venta.total)} confirmado — ${venta.orden_etiqueta}`);
+		} else {
+			// Sin conexión: el total ya lo calcula el navegador (computeTotals), así
+			// que el ticket se puede imprimir de inmediato con estos datos locales;
+			// la venta real se manda al servidor cuando vuelva la señal.
+			state.lastVenta = {
+				id: tempId,
+				orden_etiqueta: orden.etiqueta,
+				metodo_pago: 'efectivo',
+				subtotal: total,
+				impuesto: 0,
+				total,
+				recibido: received,
+				cambio: Math.max(0, received - total),
+				creado_en: new Date().toISOString(),
+				detalle,
+			};
+			orden.items = [];
+			refreshDailySales().catch(() => {});
+			showToast('Pago registrado sin conexión — se sincronizará al volver la señal');
+		}
+
+		renderCart();
 		el.cashFields.style.display = 'none';
 		el.confirmPaymentBtn.style.display = 'none';
 		el.printTicketBtn.style.display = '';
 		el.cancelPaymentBtn.textContent = 'Cerrar';
-
-		showToast(`Pago de ${formatCurrency(venta.total)} confirmado — ${venta.orden_etiqueta}`);
 	});
 }
 
@@ -478,6 +606,11 @@ function attachEvents() {
 		renderProductGrid();
 	});
 
+	el.productSearch.addEventListener('input', () => {
+		state.searchQuery = el.productSearch.value;
+		renderProductGrid();
+	});
+
 	el.productGrid.addEventListener('click', (e) => {
 		const card = (e.target as HTMLElement).closest<HTMLElement>('.product-card');
 		if (card) addToCart(Number(card.dataset.productId));
@@ -516,20 +649,38 @@ function attachEvents() {
 	});
 }
 
+// --- Sincronización offline ---
+
+function handleResolved(tempId: number, realId: number) {
+	const orden = state.ordenes.find((o) => o.id === tempId);
+	if (orden) orden.id = realId;
+	if (state.activeOrdenId === tempId) state.activeOrdenId = realId;
+	if (state.lastVenta?.id === tempId) state.lastVenta.id = realId;
+	renderCart();
+}
+
 // --- Init ---
 
 async function init() {
 	try {
-		const [productos, ordenesData] = await Promise.all([api.productos.listar(true), api.ordenes.listar()]);
-		state.productos = productos;
-		state.categorias = [...new Set(productos.map((p) => p.categoria))];
-		state.ordenes = ordenesData;
-		state.activeOrdenId = ordenesData[0]?.id ?? null;
+		const [productos, ordenesData] = await Promise.all([
+			cachedRead('productos', () => api.productos.listar(true)),
+			cachedRead('ordenes', () => api.ordenes.listar()),
+		]);
+		state.productos = productos.data;
+		state.categorias = [...new Set(productos.data.map((p) => p.categoria))];
+		state.ordenes = ordenesData.data;
+		state.activeOrdenId = ordenesData.data[0]?.id ?? null;
 
 		renderCategoryFilters();
 		renderProductGrid();
 		renderCart();
 		attachEvents();
+
+		onStatusChange(renderConnectionBadge);
+		onResolved(handleResolved);
+		startAutoSync();
+
 		await refreshDailySales();
 	} catch (err) {
 		console.error(err);

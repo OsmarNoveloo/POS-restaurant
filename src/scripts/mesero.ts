@@ -1,12 +1,16 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
-import { computeTotals, errorMessage, findProducto, formatCurrency, ordenStatus } from '../lib/posHelpers';
+import { computeTotals, errorMessage, findProducto, formatCurrency, normalizeSearch, ordenStatus } from '../lib/posHelpers';
+import { cachedRead } from '../lib/offline/cache';
+import { isOnline, onStatusChange } from '../lib/offline/network';
+import { isPendingSync, onResolved, pendingCount, runOrEnqueue, startAutoSync } from '../lib/offline/queue';
 import type { Orden, Producto } from '../types/api';
 
 const state = {
 	productos: [] as Producto[],
 	categorias: [] as string[],
 	selectedCategory: 'Todos',
+	searchQuery: '',
 	ordenes: [] as Orden[],
 	activeOrdenId: null as number | null,
 	busy: false,
@@ -19,6 +23,9 @@ const el = {
 	backToTablesBtn: $<HTMLButtonElement>('backToTablesBtn'),
 	builderTableName: $<HTMLElement>('builderTableName'),
 	builderStatusBadge: $<HTMLElement>('builderStatusBadge'),
+	connectionStatus: $<HTMLElement>('connectionStatus'),
+	productSearch: $<HTMLInputElement>('productSearch'),
+	productSearchEmpty: $<HTMLElement>('productSearchEmpty'),
 	categoryFilters: $<HTMLElement>('categoryFilters'),
 	productGrid: $<HTMLElement>('productGrid'),
 	clearOrderBtn: $<HTMLButtonElement>('clearOrderBtn'),
@@ -44,24 +51,41 @@ function showToast(message: string) {
 	setTimeout(() => el.toast.classList.remove('show'), 2200);
 }
 
-async function withBusy(fn: () => Promise<void>) {
-	if (state.busy) return;
-	state.busy = true;
-	try {
-		await fn();
-	} catch (err) {
-		console.error(err);
-		showToast(errorMessage(err));
-	} finally {
-		state.busy = false;
-	}
+let busyQueue: Promise<void> = Promise.resolve();
+
+function withBusy(fn: () => Promise<void>): Promise<void> {
+	const run = busyQueue.then(async () => {
+		state.busy = true;
+		try {
+			await fn();
+		} catch (err) {
+			console.error(err);
+			showToast(errorMessage(err));
+		} finally {
+			state.busy = false;
+		}
+	});
+	busyQueue = run;
+	return run;
 }
 
 async function refreshOrdenes() {
-	state.ordenes = await api.ordenes.listar();
+	const { data } = await cachedRead('ordenes', () => api.ordenes.listar());
+	const pending = state.ordenes.filter((o) => isPendingSync(o.id));
+	state.ordenes = [...data, ...pending];
 }
 
 // --- Rendering ---
+
+function renderConnectionBadge() {
+	const count = pendingCount();
+	const online = isOnline();
+	el.connectionStatus.hidden = online && count === 0;
+	if (el.connectionStatus.hidden) return;
+	el.connectionStatus.textContent = online
+		? `🟡 Sincronizando · ${count} pendiente${count === 1 ? '' : 's'}`
+		: `🔴 Sin conexión${count > 0 ? ` · ${count} pendiente${count === 1 ? '' : 's'}` : ''}`;
+}
 
 function renderTableBoard() {
 	el.tableGrid.innerHTML = '';
@@ -96,10 +120,12 @@ function renderCategoryFilters() {
 
 function renderProductGrid() {
 	el.productGrid.innerHTML = '';
-	const productos =
-		state.selectedCategory === 'Todos'
-			? state.productos
-			: state.productos.filter((p) => p.categoria === state.selectedCategory);
+	const query = normalizeSearch(state.searchQuery.trim());
+	const productos = state.productos
+		.filter((p) => state.selectedCategory === 'Todos' || p.categoria === state.selectedCategory)
+		.filter((p) => !query || normalizeSearch(p.nombre).includes(query));
+
+	el.productSearchEmpty.hidden = productos.length > 0;
 
 	for (const producto of productos) {
 		const card = document.createElement('button');
@@ -115,6 +141,7 @@ function renderProductGrid() {
 }
 
 function renderBuilder() {
+	renderConnectionBadge();
 	const orden = getActiveOrden();
 	if (!orden) return;
 
@@ -187,7 +214,11 @@ function addToCart(productoId: number) {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.agregarItem(orden.id, productoId, 1);
+			await runOrEnqueue(
+				{ kind: 'agregar_item', payload: { ordenId: orden.id, productoId, cantidad: 1 } },
+				() => api.ordenes.agregarItem(orden.id, productoId, 1),
+				orden.id,
+			);
 		} catch (err) {
 			if (existing) existing.cantidad -= 1;
 			else orden.items = orden.items.filter((i) => i.producto_id !== productoId);
@@ -210,7 +241,11 @@ function changeQty(productoId: number, delta: number) {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.cambiarCantidad(orden.id, productoId, delta);
+			await runOrEnqueue(
+				{ kind: 'cambiar_cantidad', payload: { ordenId: orden.id, productoId, delta } },
+				() => api.ordenes.cambiarCantidad(orden.id, productoId, delta),
+				orden.id,
+			);
 		} catch (err) {
 			if (previousCantidad + delta <= 0) orden.items.push({ producto_id: productoId, cantidad: previousCantidad });
 			else item.cantidad = previousCantidad;
@@ -231,7 +266,11 @@ function removeItem(productoId: number) {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.quitarItem(orden.id, productoId);
+			await runOrEnqueue(
+				{ kind: 'quitar_item', payload: { ordenId: orden.id, productoId } },
+				() => api.ordenes.quitarItem(orden.id, productoId),
+				orden.id,
+			);
 		} catch (err) {
 			orden.items.splice(index, 0, removed);
 			renderBuilder();
@@ -250,7 +289,11 @@ function clearOrder() {
 
 	return withBusy(async () => {
 		try {
-			await api.ordenes.vaciar(orden.id);
+			await runOrEnqueue(
+				{ kind: 'vaciar_orden', payload: { ordenId: orden.id } },
+				() => api.ordenes.vaciar(orden.id),
+				orden.id,
+			);
 			showToast(`${orden.etiqueta} vaciada`);
 		} catch (err) {
 			orden.items = previousItems;
@@ -264,10 +307,23 @@ function sendOrder() {
 	const orden = getActiveOrden();
 	if (!orden || orden.items.length === 0) return;
 	return withBusy(async () => {
-		await api.ordenes.enviar(orden.id);
-		await refreshOrdenes();
-		showToast(`Orden de ${orden.etiqueta} enviada a caja`);
-		backToTables();
+		const previousEstado = orden.estado;
+		orden.estado = 'enviada';
+		renderBuilder();
+		try {
+			await runOrEnqueue(
+				{ kind: 'enviar_orden', payload: { ordenId: orden.id } },
+				() => api.ordenes.enviar(orden.id),
+				orden.id,
+			);
+			await refreshOrdenes();
+			showToast(`Orden de ${orden.etiqueta} enviada a caja`);
+			backToTables();
+		} catch (err) {
+			orden.estado = previousEstado;
+			renderBuilder();
+			throw err;
+		}
 	});
 }
 
@@ -286,6 +342,11 @@ function attachEvents() {
 		if (!chip || !chip.dataset.category) return;
 		state.selectedCategory = chip.dataset.category;
 		renderCategoryFilters();
+		renderProductGrid();
+	});
+
+	el.productSearch.addEventListener('input', () => {
+		state.searchQuery = el.productSearch.value;
 		renderProductGrid();
 	});
 
@@ -309,19 +370,40 @@ function attachEvents() {
 	el.sendOrderBtn.addEventListener('click', sendOrder);
 }
 
+// --- Sincronización offline ---
+
+function handleResolved(tempId: number, realId: number) {
+	const orden = state.ordenes.find((o) => o.id === tempId);
+	if (orden) orden.id = realId;
+	if (state.activeOrdenId === tempId) state.activeOrdenId = realId;
+	renderBuilder();
+	renderTableBoard();
+}
+
 // --- Init ---
 
 async function init() {
 	try {
-		const [productos, ordenesData] = await Promise.all([api.productos.listar(true), api.ordenes.listar()]);
-		state.productos = productos;
-		state.categorias = [...new Set(productos.map((p) => p.categoria))];
-		state.ordenes = ordenesData;
+		const [productos, ordenesData] = await Promise.all([
+			cachedRead('productos', () => api.productos.listar(true)),
+			cachedRead('ordenes', () => api.ordenes.listar()),
+		]);
+		state.productos = productos.data;
+		state.categorias = [...new Set(productos.data.map((p) => p.categoria))];
+		state.ordenes = ordenesData.data;
 
 		renderCategoryFilters();
 		renderProductGrid();
 		renderTableBoard();
+		renderConnectionBadge();
 		attachEvents();
+
+		onStatusChange(() => {
+			renderConnectionBadge();
+			renderTableBoard();
+		});
+		onResolved(handleResolved);
+		startAutoSync();
 	} catch (err) {
 		console.error(err);
 		showToast(errorMessage(err));

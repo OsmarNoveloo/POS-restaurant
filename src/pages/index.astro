@@ -42,6 +42,7 @@ import '../styles/global.css';
 				<a href="/productos" class="btn ghost" title="Productos">
 					<span class="btn-icon">🍽️</span><span class="btn-label"> Productos</span>
 				</a>
+				<span class="connection-status" id="connectionStatus" hidden></span>
 				<div class="daily-sales">
 					<span class="label">Ventas del día</span>
 					<span class="value" id="dailySales">$0.00</span>
@@ -51,8 +52,10 @@ import '../styles/global.css';
 
 		<main class="pos">
 			<section class="catalog">
+				<input type="search" class="product-search" id="productSearch" placeholder="🔍 Buscar producto…" aria-label="Buscar producto" />
 				<div class="category-filters" id="categoryFilters"></div>
 				<div class="product-grid" id="productGrid"></div>
+				<p class="empty-state" id="productSearchEmpty" hidden>No se encontraron productos.</p>
 			</section>
 
 			<aside class="order-panel">

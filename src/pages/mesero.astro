@@ -18,6 +18,7 @@ import '../styles/global.css';
 			</div>
 
 			<div class="navbar-actions">
+				<span class="connection-status" id="connectionStatus" hidden></span>
 				<a href="/" class="btn ghost" title="Ver Caja">
 					<span class="btn-icon">🧾</span><span class="btn-label"> Ver Caja</span>
 				</a>
@@ -45,8 +46,10 @@ import '../styles/global.css';
 
 				<div class="pos">
 					<section class="catalog">
+						<input type="search" class="product-search" id="productSearch" placeholder="🔍 Buscar producto…" aria-label="Buscar producto" />
 						<div class="category-filters" id="categoryFilters"></div>
 						<div class="product-grid" id="productGrid"></div>
+						<p class="empty-state" id="productSearchEmpty" hidden>No se encontraron productos.</p>
 					</section>
 
 					<aside class="order-panel">

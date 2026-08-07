@@ -1,6 +1,7 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
 import { errorMessage, formatCurrency } from '../lib/posHelpers';
+import { cachedRead } from '../lib/offline/cache';
 import type { Producto, ProductoInput } from '../types/api';
 
 type Filtro = 'todos' | 'activos' | 'inactivos';
@@ -66,7 +67,8 @@ async function withBusy(fn: () => Promise<void>) {
 }
 
 async function refreshProductos() {
-	state.productos = await api.productos.listar();
+	const { data } = await cachedRead('productos-admin', () => api.productos.listar());
+	state.productos = data;
 }
 
 // --- Rendering ---

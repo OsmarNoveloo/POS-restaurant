@@ -51,10 +51,16 @@ async function printViaSerial(bytes: Uint8Array): Promise<void> {
 
 	try {
 		await writer.write(bytes);
+		// writer.write() resuelve en cuanto el navegador entrega los bytes al
+		// driver, no cuando el puerto termina de transmitirlos. Cerrar el
+		// writable stream sí espera a que se vacíe por completo; sin esto,
+		// port.close() corta la transmisión a medias en tickets largos.
+		await writer.close();
 	} finally {
 		writer.releaseLock();
-		await port.close();
 	}
+
+	await port.close();
 }
 
 function toBase64(bytes: Uint8Array): string {
