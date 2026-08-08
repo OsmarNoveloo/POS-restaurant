@@ -181,7 +181,7 @@ function renderBuilder() {
 	const { subtotal, total } = computeTotals(orden.items, state.productos);
 	el.subtotal.textContent = formatCurrency(subtotal);
 	el.total.textContent = formatCurrency(total);
-	el.sendOrderBtn.disabled = orden.items.length === 0;
+	el.sendOrderBtn.disabled = orden.items.length === 0 || sendingOrder;
 	el.sendOrderBtn.textContent = status.key === 'sent' ? 'Orden enviada ✓' : 'Enviar orden a caja';
 }
 
@@ -303,9 +303,16 @@ function clearOrder() {
 	});
 }
 
+// En pantalla táctil un doble tap en "Enviar orden" alcanzaba a mandar la
+// orden dos veces antes de que la primera terminara (renderBuilder solo
+// deshabilita el botón según items.length, no según si ya se está enviando).
+let sendingOrder = false;
+
 function sendOrder() {
 	const orden = getActiveOrden();
-	if (!orden || orden.items.length === 0) return;
+	if (!orden || orden.items.length === 0 || sendingOrder) return;
+
+	sendingOrder = true;
 	return withBusy(async () => {
 		const previousEstado = orden.estado;
 		orden.estado = 'enviada';
@@ -323,6 +330,8 @@ function sendOrder() {
 			orden.estado = previousEstado;
 			renderBuilder();
 			throw err;
+		} finally {
+			sendingOrder = false;
 		}
 	});
 }

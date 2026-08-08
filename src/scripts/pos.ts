@@ -373,11 +373,16 @@ function commitDeliveryInfo() {
 
 function printComandaTicket() {
 	const orden = getActiveOrden();
-	if (!orden || orden.items.length === 0) return;
+	if (!orden || orden.items.length === 0 || el.printComandaBtn.disabled) return;
 
+	el.printComandaBtn.disabled = true;
 	return withBusy(async () => {
-		await printComanda(orden, state.productos);
-		showToast('Comanda enviada a la impresora');
+		try {
+			await printComanda(orden, state.productos);
+			showToast('Comanda enviada a la impresora');
+		} finally {
+			el.printComandaBtn.disabled = orden.items.length === 0;
+		}
 	});
 }
 
@@ -521,6 +526,7 @@ function openPaymentModal() {
 	el.modalTotal.textContent = formatCurrency(total);
 	el.cashReceived.value = '';
 	el.changeAmount.textContent = formatCurrency(0);
+	el.confirmPaymentBtn.disabled = false;
 	el.modal.classList.add('open');
 }
 
@@ -528,6 +534,7 @@ function closePaymentModal() {
 	el.modal.classList.remove('open');
 	el.cashFields.style.display = '';
 	el.confirmPaymentBtn.style.display = '';
+	el.confirmPaymentBtn.disabled = false;
 	el.printTicketBtn.style.display = 'none';
 	el.cancelPaymentBtn.textContent = 'Cancelar';
 }
@@ -542,6 +549,12 @@ function updateChange() {
 }
 
 function confirmPayment() {
+	// Un doble tap en "Confirmar pago" (común en pantallas táctiles con la
+	// conexión lenta) alcanzaba a mandar dos ventas para la misma orden antes
+	// de que la primera terminara: la segunda fallaba con un toast confuso de
+	// "la orden no tiene productos" justo después de cobrar bien la primera.
+	if (el.confirmPaymentBtn.disabled) return;
+
 	const orden = getActiveOrden();
 	if (!orden) return;
 	const { total } = computeTotals(orden.items, state.productos);
@@ -552,70 +565,84 @@ function confirmPayment() {
 		return;
 	}
 
+	el.confirmPaymentBtn.disabled = true;
 	return withBusy(async () => {
-		const tempId = nextTempId();
-		const detalle = orden.items.map((item) => {
-			const producto = findProducto(state.productos, item.producto_id);
-			return {
-				producto_nombre: producto?.nombre ?? 'Producto',
-				categoria: producto?.categoria ?? '',
-				cantidad: item.cantidad,
-				precio: producto?.precio ?? 0,
-			};
-		});
-
-		const venta = await runOrEnqueue(
-			{
-				kind: 'crear_venta',
-				payload: { tempId, ordenId: orden.id, metodoPago: 'efectivo', recibido: received, total },
-			},
-			() => api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo', recibido: received }),
-			orden.id,
-		);
-
-		if (venta) {
-			state.lastVenta = venta;
-			await refreshOrdenes();
-			await refreshDailySales();
-			showToast(`Pago de ${formatCurrency(venta.total)} confirmado — ${venta.orden_etiqueta}`);
-		} else {
-			// Sin conexión: el total ya lo calcula el navegador (computeTotals), así
-			// que el ticket se puede imprimir de inmediato con estos datos locales;
-			// la venta real se manda al servidor cuando vuelva la señal.
-			state.lastVenta = {
-				id: tempId,
-				orden_etiqueta: orden.etiqueta,
-				metodo_pago: 'efectivo',
-				subtotal: total,
-				impuesto: 0,
-				total,
-				recibido: received,
-				cambio: Math.max(0, received - total),
-				creado_en: new Date().toISOString(),
-				direccion_entrega: orden.direccion_entrega,
-				detalle_entrega: orden.detalle_entrega,
-				// El folio del día lo asigna el servidor; se desconoce hasta sincronizar.
-				folio: null,
-				detalle,
-			};
-			orden.items = [];
-			refreshDailySales().catch(() => {});
-			showToast('Pago registrado sin conexión — se sincronizará al volver la señal');
+		try {
+			await confirmPaymentInner(orden, total, received);
+		} finally {
+			el.confirmPaymentBtn.disabled = false;
 		}
-
-		renderCart();
-		el.cashFields.style.display = 'none';
-		el.confirmPaymentBtn.style.display = 'none';
-		el.printTicketBtn.style.display = '';
-		el.cancelPaymentBtn.textContent = 'Cerrar';
 	});
 }
 
+async function confirmPaymentInner(orden: Orden, total: number, received: number): Promise<void> {
+	const tempId = nextTempId();
+	const detalle = orden.items.map((item) => {
+		const producto = findProducto(state.productos, item.producto_id);
+		return {
+			producto_nombre: producto?.nombre ?? 'Producto',
+			categoria: producto?.categoria ?? '',
+			cantidad: item.cantidad,
+			precio: producto?.precio ?? 0,
+		};
+	});
+
+	const venta = await runOrEnqueue(
+		{
+			kind: 'crear_venta',
+			payload: { tempId, ordenId: orden.id, metodoPago: 'efectivo', recibido: received, total },
+		},
+		() => api.ventas.crear({ orden_id: orden.id, metodo_pago: 'efectivo', recibido: received }),
+		orden.id,
+	);
+
+	if (venta) {
+		state.lastVenta = venta;
+		await refreshOrdenes();
+		await refreshDailySales();
+		showToast(`Pago de ${formatCurrency(venta.total)} confirmado — ${venta.orden_etiqueta}`);
+	} else {
+		// Sin conexión: el total ya lo calcula el navegador (computeTotals), así
+		// que el ticket se puede imprimir de inmediato con estos datos locales;
+		// la venta real se manda al servidor cuando vuelva la señal.
+		state.lastVenta = {
+			id: tempId,
+			orden_etiqueta: orden.etiqueta,
+			metodo_pago: 'efectivo',
+			subtotal: total,
+			impuesto: 0,
+			total,
+			recibido: received,
+			cambio: Math.max(0, received - total),
+			creado_en: new Date().toISOString(),
+			direccion_entrega: orden.direccion_entrega,
+			detalle_entrega: orden.detalle_entrega,
+			// El folio del día lo asigna el servidor; se desconoce hasta sincronizar.
+			folio: null,
+			detalle,
+		};
+		orden.items = [];
+		refreshDailySales().catch(() => {});
+		showToast('Pago registrado sin conexión — se sincronizará al volver la señal');
+	}
+
+	renderCart();
+	el.cashFields.style.display = 'none';
+	el.confirmPaymentBtn.style.display = 'none';
+	el.printTicketBtn.style.display = '';
+	el.cancelPaymentBtn.textContent = 'Cerrar';
+}
+
 function printLastTicket() {
-	if (!state.lastVenta) return;
+	if (!state.lastVenta || el.printTicketBtn.disabled) return;
+	el.printTicketBtn.disabled = true;
 	return withBusy(async () => {
-		await printTicket(state.lastVenta!);
-		showToast('Ticket enviado a la impresora');
+		try {
+			await printTicket(state.lastVenta!);
+			showToast('Ticket enviado a la impresora');
+		} finally {
+			el.printTicketBtn.disabled = false;
+		}
 	});
 }
 
