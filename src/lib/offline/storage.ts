@@ -44,3 +44,11 @@ export function getRemap(): Record<number, number> {
 export function setRemap(remap: Record<number, number>): void {
 	write('remap', remap);
 }
+
+export function getSequence(key: string): { date: string; next: number } | undefined {
+	return read<{ date: string; next: number }>(`seq:${key}`);
+}
+
+export function setSequence(key: string, value: { date: string; next: number }): void {
+	write(`seq:${key}`, value);
+}

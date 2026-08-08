@@ -1,6 +1,6 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
-import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency, normalizeSearch } from '../lib/posHelpers';
+import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency, nextDailySequence, normalizeSearch } from '../lib/posHelpers';
 import { printComanda, printTicket } from '../lib/print/transport';
 import { cachedRead } from '../lib/offline/cache';
 import { isOnline, onStatusChange } from '../lib/offline/network';
@@ -395,9 +395,12 @@ function switchOrder(ordenId: number) {
 
 // "Mesa N" queda reservado para las órdenes que llegan del Mesero (mesas
 // físicas). Las que se abren directamente en Caja son pedidos sueltos
-// (para llevar, a domicilio, teléfono...), así que se numeran aparte.
+// (para llevar, a domicilio, teléfono...), así que se numeran aparte con un
+// contador que nunca repite un número en el día: contar las órdenes "Pedido"
+// que siguen abiertas no sirve, porque en cuanto el Pedido 1 se cobra o se
+// borra, el conteo baja y el siguiente pedido nuevo se vuelve a llamar "1".
 function addNewOrder() {
-	const nextOrderNumber = state.ordenes.filter((o) => o.etiqueta.startsWith('Pedido')).length + 1;
+	const nextOrderNumber = nextDailySequence('pedido');
 	const etiqueta = `Pedido ${nextOrderNumber}`;
 	const tempId = nextTempId();
 	const orden: Orden = {
@@ -424,6 +427,34 @@ function addNewOrder() {
 			renderCart();
 		}
 	});
+}
+
+const PEDIDO_AUTO_LABEL = /^Pedido \d+$/;
+
+// Después de cobrar, la orden se queda abierta y vacía para poder reusarse
+// (igual que una mesa). Si seguía con su nombre automático "Pedido N", se
+// renombra sola al siguiente número de la secuencia: así, si el cajero le
+// agrega productos a esa misma pestaña sin pasar por "Nueva orden", el
+// siguiente cobro no vuelve a salir como el mismo "Pedido N" ya cobrado. Los
+// nombres que el cajero puso a mano (o "Mesa N" de una mesa real) no se tocan.
+async function renameForNextPedido(ordenId: number): Promise<void> {
+	const orden = state.ordenes.find((o) => o.id === ordenId);
+	if (!orden || !PEDIDO_AUTO_LABEL.test(orden.etiqueta)) return;
+
+	const nuevaEtiqueta = `Pedido ${nextDailySequence('pedido')}`;
+	const previous = orden.etiqueta;
+	orden.etiqueta = nuevaEtiqueta;
+
+	try {
+		await runOrEnqueue(
+			{ kind: 'actualizar_orden', payload: { ordenId: orden.id, etiqueta: nuevaEtiqueta } },
+			() => api.ordenes.actualizar(orden.id, { etiqueta: nuevaEtiqueta }),
+			orden.id,
+		);
+	} catch (err) {
+		orden.etiqueta = previous;
+		console.error('No se pudo renombrar el pedido cobrado', err);
+	}
 }
 
 function startRenameOrder(ordenId: number) {
@@ -599,6 +630,7 @@ async function confirmPaymentInner(orden: Orden, total: number, received: number
 	if (venta) {
 		state.lastVenta = venta;
 		await refreshOrdenes();
+		await renameForNextPedido(orden.id);
 		await refreshDailySales();
 		showToast(`Pago de ${formatCurrency(venta.total)} confirmado — ${venta.orden_etiqueta}`);
 	} else {
@@ -622,6 +654,7 @@ async function confirmPaymentInner(orden: Orden, total: number, received: number
 			detalle,
 		};
 		orden.items = [];
+		await renameForNextPedido(orden.id);
 		refreshDailySales().catch(() => {});
 		showToast('Pago registrado sin conexión — se sincronizará al volver la señal');
 	}

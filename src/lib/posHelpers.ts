@@ -1,5 +1,6 @@
 import type { Orden, OrdenItem, Producto } from '../types/api';
 import { ApiError } from './api';
+import { getSequence, setSequence } from './offline/storage';
 
 export function formatCurrency(amount: number): string {
 	return `$${amount.toFixed(2)}`;
@@ -44,4 +45,22 @@ export function ordenStatus(orden: Orden): { key: 'free' | 'sent' | 'draft'; lab
 export function errorMessage(err: unknown): string {
 	if (err instanceof ApiError) return err.message;
 	return 'Error de conexión con el servidor';
+}
+
+function todayKey(): string {
+	const now = new Date();
+	return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// Contador que nunca repite un número dentro del mismo día, aunque la orden
+// que lo usó se cobre o se elimine después (a diferencia de contar cuántas
+// órdenes con ese prefijo siguen abiertas, que sí podía repetir el número
+// una vez que la primera desaparecía de la lista). Se reinicia solo al
+// cambiar de día, comparando contra la fecha local guardada.
+export function nextDailySequence(key: string): number {
+	const today = todayKey();
+	const stored = getSequence(key);
+	const next = stored && stored.date === today ? stored.next : 1;
+	setSequence(key, { date: today, next: next + 1 });
+	return next;
 }
