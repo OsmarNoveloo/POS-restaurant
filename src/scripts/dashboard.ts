@@ -125,6 +125,8 @@ function renderSalesLog() {
 		const detalleTexto = venta.detalle.map((item) => `${item.cantidad}x ${item.producto_nombre}`).join(', ');
 		const tr = document.createElement('tr');
 
+		const folioTd = document.createElement('td');
+		folioTd.textContent = venta.folio != null ? String(venta.folio) : '—';
 		const timeTd = document.createElement('td');
 		timeTd.textContent = formatTime(venta.creado_en);
 		const tableTd = document.createElement('td');
@@ -143,7 +145,7 @@ function renderSalesLog() {
 		printTd.className = 'align-right';
 		printTd.innerHTML = `<button class="print-btn" data-venta-id="${venta.id}" title="Imprimir ticket">🖨️</button>`;
 
-		tr.append(timeTd, tableTd, itemsTd, paymentTd, totalTd, printTd);
+		tr.append(folioTd, timeTd, tableTd, itemsTd, paymentTd, totalTd, printTd);
 		el.salesLogBody.appendChild(tr);
 	}
 }

@@ -1,7 +1,7 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
 import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency, normalizeSearch } from '../lib/posHelpers';
-import { printTicket } from '../lib/print/transport';
+import { printComanda, printTicket } from '../lib/print/transport';
 import { cachedRead } from '../lib/offline/cache';
 import { isOnline, onStatusChange } from '../lib/offline/network';
 import {
@@ -41,6 +41,9 @@ const el = {
 	productGrid: $<HTMLElement>('productGrid'),
 	activeOrderName: $<HTMLElement>('activeOrderName'),
 	clearOrderBtn: $<HTMLButtonElement>('clearOrderBtn'),
+	printComandaBtn: $<HTMLButtonElement>('printComandaBtn'),
+	deliveryAddress: $<HTMLInputElement>('deliveryAddress'),
+	deliveryDetail: $<HTMLInputElement>('deliveryDetail'),
 	cartItems: $<HTMLElement>('cartItems'),
 	orderEmpty: $<HTMLElement>('orderEmpty'),
 	subtotal: $<HTMLElement>('subtotal'),
@@ -168,7 +171,7 @@ function renderProductGrid() {
 	const query = normalizeSearch(state.searchQuery.trim());
 	const productos = state.productos
 		.filter((p) => state.selectedCategory === 'Todos' || p.categoria === state.selectedCategory)
-		.filter((p) => !query || normalizeSearch(p.nombre).includes(query));
+		.filter((p) => !query || normalizeSearch(p.nombre).includes(query) || normalizeSearch(p.categoria).includes(query));
 
 	el.productSearchEmpty.hidden = productos.length > 0;
 
@@ -191,6 +194,7 @@ function renderCart() {
 	if (!orden) return;
 
 	el.activeOrderName.textContent = orden.etiqueta;
+	syncDeliveryInputs(orden);
 	el.cartItems.innerHTML = '';
 
 	if (orden.items.length === 0) {
@@ -224,8 +228,17 @@ function renderCart() {
 	el.subtotal.textContent = formatCurrency(subtotal);
 	el.total.textContent = formatCurrency(total);
 	el.chargeBtn.disabled = orden.items.length === 0;
+	el.printComandaBtn.disabled = orden.items.length === 0;
 
 	renderOrderTabs();
+}
+
+// No se pisa el valor mientras el usuario está escribiendo: renderCart se
+// dispara en cada cambio del carrito (agregar producto, etc.), no solo al
+// cambiar de orden.
+function syncDeliveryInputs(orden: Orden) {
+	if (document.activeElement !== el.deliveryAddress) el.deliveryAddress.value = orden.direccion_entrega ?? '';
+	if (document.activeElement !== el.deliveryDetail) el.deliveryDetail.value = orden.detalle_entrega ?? '';
 }
 
 // --- Cart mutations ---
@@ -330,6 +343,44 @@ function clearActiveOrder() {
 	});
 }
 
+function commitDeliveryInfo() {
+	const orden = getActiveOrden();
+	if (!orden) return;
+
+	const direccion = el.deliveryAddress.value.trim() || null;
+	const detalle = el.deliveryDetail.value.trim() || null;
+	if (orden.direccion_entrega === direccion && orden.detalle_entrega === detalle) return;
+
+	const previous = { direccion: orden.direccion_entrega, detalle: orden.detalle_entrega };
+	orden.direccion_entrega = direccion;
+	orden.detalle_entrega = detalle;
+
+	return withBusy(async () => {
+		try {
+			await runOrEnqueue(
+				{ kind: 'actualizar_orden', payload: { ordenId: orden.id, direccion_entrega: direccion, detalle_entrega: detalle } },
+				() => api.ordenes.actualizar(orden.id, { direccion_entrega: direccion, detalle_entrega: detalle }),
+				orden.id,
+			);
+		} catch (err) {
+			orden.direccion_entrega = previous.direccion;
+			orden.detalle_entrega = previous.detalle;
+			syncDeliveryInputs(orden);
+			throw err;
+		}
+	});
+}
+
+function printComandaTicket() {
+	const orden = getActiveOrden();
+	if (!orden || orden.items.length === 0) return;
+
+	return withBusy(async () => {
+		await printComanda(orden, state.productos);
+		showToast('Comanda enviada a la impresora');
+	});
+}
+
 // --- Orders ---
 
 function switchOrder(ordenId: number) {
@@ -337,11 +388,22 @@ function switchOrder(ordenId: number) {
 	renderCart();
 }
 
+// "Mesa N" queda reservado para las órdenes que llegan del Mesero (mesas
+// físicas). Las que se abren directamente en Caja son pedidos sueltos
+// (para llevar, a domicilio, teléfono...), así que se numeran aparte.
 function addNewOrder() {
-	const nextTableNumber = state.ordenes.filter((o) => o.etiqueta.startsWith('Mesa')).length + 1;
-	const etiqueta = `Mesa ${nextTableNumber}`;
+	const nextOrderNumber = state.ordenes.filter((o) => o.etiqueta.startsWith('Pedido')).length + 1;
+	const etiqueta = `Pedido ${nextOrderNumber}`;
 	const tempId = nextTempId();
-	const orden: Orden = { id: tempId, etiqueta, estado: null, creado_en: new Date().toISOString(), items: [] };
+	const orden: Orden = {
+		id: tempId,
+		etiqueta,
+		estado: null,
+		creado_en: new Date().toISOString(),
+		direccion_entrega: null,
+		detalle_entrega: null,
+		items: [],
+	};
 	state.ordenes.push(orden);
 	switchOrder(tempId);
 
@@ -530,6 +592,10 @@ function confirmPayment() {
 				recibido: received,
 				cambio: Math.max(0, received - total),
 				creado_en: new Date().toISOString(),
+				direccion_entrega: orden.direccion_entrega,
+				detalle_entrega: orden.detalle_entrega,
+				// El folio del día lo asigna el servidor; se desconoce hasta sincronizar.
+				folio: null,
 				detalle,
 			};
 			orden.items = [];
@@ -628,6 +694,9 @@ function attachEvents() {
 	});
 
 	el.clearOrderBtn.addEventListener('click', clearActiveOrder);
+	el.printComandaBtn.addEventListener('click', printComandaTicket);
+	el.deliveryAddress.addEventListener('change', commitDeliveryInfo);
+	el.deliveryDetail.addEventListener('change', commitDeliveryInfo);
 	el.chargeBtn.addEventListener('click', openPaymentModal);
 	el.cancelPaymentBtn.addEventListener('click', closePaymentModal);
 	el.confirmPaymentBtn.addEventListener('click', confirmPayment);

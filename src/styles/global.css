@@ -37,6 +37,11 @@ body {
 	color: var(--ink);
 	display: flex;
 	flex-direction: column;
+	/* iPhone con notch/Dynamic Island y sin botón físico (12 a 14 normales):
+	   evita que el contenido quede debajo del área de gestos. */
+	padding-bottom: env(safe-area-inset-bottom);
+	padding-left: env(safe-area-inset-left);
+	padding-right: env(safe-area-inset-right);
 }
 
 button {
@@ -52,6 +57,7 @@ button {
 	align-items: center;
 	gap: 1.5rem;
 	padding: 0.75rem 1.5rem;
+	padding-top: max(0.75rem, env(safe-area-inset-top));
 	flex-wrap: wrap;
 }
 
@@ -423,6 +429,49 @@ a.btn {
 .order-panel-header h2 {
 	font-size: 1.1rem;
 	margin: 0;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.order-panel-header .header-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+	flex-shrink: 0;
+}
+
+.order-panel-header .header-actions .btn.text {
+	white-space: nowrap;
+}
+
+.delivery-info {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin-bottom: 0.6rem;
+}
+
+.delivery-input {
+	width: 100%;
+	padding: 0.5rem 0.7rem;
+	border: 1px solid var(--cream-dark);
+	border-radius: 8px;
+	background: var(--cream);
+	color: var(--ink);
+	font-size: 0.82rem;
+	font-family: inherit;
+}
+
+.delivery-input::placeholder {
+	color: var(--muted);
+}
+
+.delivery-input:focus {
+	outline: none;
+	border-color: var(--gold);
+	box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.25);
 }
 
 .cart-items {
@@ -739,7 +788,7 @@ a.btn {
 /* Toast */
 .toast {
 	position: fixed;
-	bottom: 1.5rem;
+	bottom: calc(1.5rem + env(safe-area-inset-bottom));
 	left: 50%;
 	transform: translateX(-50%) translateY(20px);
 	background: var(--wood);
@@ -1267,6 +1316,27 @@ a.btn {
 
 	.btn {
 		padding: 0.7rem 0.9rem;
+	}
+
+	/* iOS hace zoom automático al enfocar un input con font-size menor a 16px;
+	   en pantalla completa (12 a 14 normales) eso descuadra todo el layout. */
+	.product-search,
+	.delivery-input,
+	.order-tab-input {
+		font-size: 1rem;
+	}
+
+	.order-tab-input {
+		width: 108px;
+	}
+
+	.order-panel-header {
+		gap: 0.5rem;
+	}
+
+	.order-panel-header .header-actions .btn.text {
+		padding: 0.3rem 0.4rem;
+		font-size: 0.82rem;
 	}
 
 	.category-filters {

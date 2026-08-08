@@ -123,7 +123,7 @@ function renderProductGrid() {
 	const query = normalizeSearch(state.searchQuery.trim());
 	const productos = state.productos
 		.filter((p) => state.selectedCategory === 'Todos' || p.categoria === state.selectedCategory)
-		.filter((p) => !query || normalizeSearch(p.nombre).includes(query));
+		.filter((p) => !query || normalizeSearch(p.nombre).includes(query) || normalizeSearch(p.categoria).includes(query));
 
 	el.productSearchEmpty.hidden = productos.length > 0;
 

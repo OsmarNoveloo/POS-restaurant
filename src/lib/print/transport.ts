@@ -1,5 +1,5 @@
-import type { Venta } from '../../types/api';
-import { buildTicket } from './escpos';
+import type { Orden, Producto, Venta } from '../../types/api';
+import { buildComandaTicket, buildTicket } from './escpos';
 
 export function canPrintViaSerial(): boolean {
 	return 'serial' in navigator && !!navigator.serial;
@@ -79,9 +79,7 @@ function printViaCustomScheme(bytes: Uint8Array): void {
 	window.location.href = `rinconprint://print?data=${encodeURIComponent(toBase64(bytes))}`;
 }
 
-export async function printTicket(venta: Venta): Promise<void> {
-	const bytes = buildTicket(venta);
-
+async function sendBytes(bytes: Uint8Array): Promise<void> {
 	if (isIOS()) {
 		printViaCustomScheme(bytes);
 		return;
@@ -98,4 +96,14 @@ export async function printTicket(venta: Venta): Promise<void> {
 	}
 
 	throw new Error('Impresión no soportada en este navegador. Usa Chrome/Edge en PC, Android con RawBT o iPhone con la app Rincon Print instalados.');
+}
+
+export async function printTicket(venta: Venta): Promise<void> {
+	await sendBytes(buildTicket(venta));
+}
+
+// Manda la comanda a cocina sin cobrar: mismos transportes que el ticket de
+// venta, pero sin precios/totales (ver buildComandaTicket).
+export async function printComanda(orden: Orden, productos: Producto[]): Promise<void> {
+	await sendBytes(buildComandaTicket(orden, productos));
 }

@@ -24,7 +24,13 @@ type QueueOp =
 	| {
 			id: number;
 			kind: 'actualizar_orden';
-			payload: { ordenId: number; etiqueta?: string; estado?: EstadoOrden };
+			payload: {
+				ordenId: number;
+				etiqueta?: string;
+				estado?: EstadoOrden;
+				direccion_entrega?: string | null;
+				detalle_entrega?: string | null;
+			};
 			createdAt: number;
 	  }
 	| { id: number; kind: 'eliminar_orden'; payload: { ordenId: number }; createdAt: number }
@@ -169,7 +175,12 @@ async function applyOp(op: QueueOp): Promise<void> {
 		case 'actualizar_orden': {
 			const ordenId = resolveId(op.payload.ordenId);
 			if (ordenId < 0) throw new NotReadyError();
-			await api.ordenes.actualizar(ordenId, { etiqueta: op.payload.etiqueta, estado: op.payload.estado });
+			await api.ordenes.actualizar(ordenId, {
+				etiqueta: op.payload.etiqueta,
+				estado: op.payload.estado,
+				direccion_entrega: op.payload.direccion_entrega,
+				detalle_entrega: op.payload.detalle_entrega,
+			});
 			return;
 		}
 		case 'eliminar_orden': {

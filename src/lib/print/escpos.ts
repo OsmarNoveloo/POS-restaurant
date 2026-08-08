@@ -1,5 +1,5 @@
-import { formatCurrency } from '../posHelpers';
-import type { Venta, VentaDetalleItem } from '../../types/api';
+import { findProducto, formatCurrency } from '../posHelpers';
+import type { Orden, Producto, Venta, VentaDetalleItem } from '../../types/api';
 import { RECEIPT_CONFIG } from './config';
 
 // La MP210 no garantiza soporte de UTF-8/codepage con acentos, así que el
@@ -49,6 +49,27 @@ function divider(columns: number): string {
 	return '-'.repeat(columns);
 }
 
+// Las direcciones/detalles pueden exceder el ancho del rollo (32 columnas);
+// se parten por palabra para no cortar texto a la mitad.
+function wrapText(text: string, columns: number): string[] {
+	const words = text.split(/\s+/).filter(Boolean);
+	const lines: string[] = [];
+	let current = '';
+
+	for (const word of words) {
+		const candidate = current ? `${current} ${word}` : word;
+		if (candidate.length > columns) {
+			if (current) lines.push(current);
+			current = word.length > columns ? word.slice(0, columns) : word;
+		} else {
+			current = candidate;
+		}
+	}
+	if (current) lines.push(current);
+
+	return lines;
+}
+
 function itemLines(item: VentaDetalleItem, columns: number): string[] {
 	const left = `${item.cantidad}x ${item.producto_nombre}`;
 	const right = formatCurrency(item.precio * item.cantidad);
@@ -81,9 +102,16 @@ export function buildTicket(venta: Venta): Uint8Array {
 	// depender de que la impresora lo soporte.
 	w.raw(0x1b, 0x45, 0x01); // bold on
 	w.line(center(businessName, columns));
+	if (venta.folio != null) w.line(center(`Pedido #${venta.folio}`, columns));
 	w.raw(0x1b, 0x45, 0x00); // bold off
 	w.line(center(venta.orden_etiqueta, columns));
 	w.line(center(formatTicketDate(venta.creado_en), columns));
+	if (venta.direccion_entrega) {
+		for (const line of wrapText(`Entrega: ${venta.direccion_entrega}`, columns)) w.line(line);
+	}
+	if (venta.detalle_entrega) {
+		for (const line of wrapText(`Detalle: ${venta.detalle_entrega}`, columns)) w.line(line);
+	}
 	w.line(divider(columns));
 
 	for (const item of venta.detalle) {
@@ -108,6 +136,39 @@ export function buildTicket(venta: Venta): Uint8Array {
 	// La MP210 no tiene cuchilla; mandarle el comando de corte (GS V) puede hacer
 	// que truene el buzzer de error y tire la conexión. En vez de cortar, se deja
 	// bastante espacio en blanco para arrancar el ticket a mano sin perder texto.
+	w.raw(0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a);
+
+	return w.toBytes();
+}
+
+// Comanda para cocina: solo productos, sin precios ni totales, para mandar la
+// orden a preparar antes de cobrar.
+export function buildComandaTicket(orden: Orden, productos: Producto[]): Uint8Array {
+	const { columns, businessName } = RECEIPT_CONFIG;
+	const w = new TicketWriter();
+
+	w.raw(0x1b, 0x40); // init
+	w.raw(0x1b, 0x45, 0x01); // bold on
+	w.line(center(businessName, columns));
+	w.line(center('COMANDA (SIN COBRAR)', columns));
+	w.raw(0x1b, 0x45, 0x00); // bold off
+	w.line(center(orden.etiqueta, columns));
+	w.line(center(formatTicketDate(orden.creado_en), columns));
+	if (orden.direccion_entrega) {
+		for (const line of wrapText(`Entrega: ${orden.direccion_entrega}`, columns)) w.line(line);
+	}
+	if (orden.detalle_entrega) {
+		for (const line of wrapText(`Detalle: ${orden.detalle_entrega}`, columns)) w.line(line);
+	}
+	w.line(divider(columns));
+
+	for (const item of orden.items) {
+		const producto = findProducto(productos, item.producto_id);
+		w.line(`${item.cantidad}x ${producto?.nombre ?? 'Producto'}`);
+	}
+
+	w.line(divider(columns));
+	w.line();
 	w.raw(0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a);
 
 	return w.toBytes();

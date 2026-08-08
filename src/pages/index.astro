@@ -6,7 +6,7 @@ import '../styles/global.css';
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Rincon Mexicano</title>
 		<script is:inline>
@@ -60,8 +60,16 @@ import '../styles/global.css';
 
 			<aside class="order-panel">
 				<div class="order-panel-header">
-					<h2 id="activeOrderName">Mesa 1</h2>
-					<button id="clearOrderBtn" class="btn text" title="Vaciar orden">Vaciar</button>
+					<h2 id="activeOrderName">Pedido 1</h2>
+					<div class="header-actions">
+						<button id="printComandaBtn" class="btn text" title="Imprimir comanda para cocina, sin cobrar">🖨️ Comanda</button>
+						<button id="clearOrderBtn" class="btn text" title="Vaciar orden">Vaciar</button>
+					</div>
+				</div>
+
+				<div class="delivery-info">
+					<input type="text" id="deliveryAddress" class="delivery-input" placeholder="📍 Dirección de entrega (opcional)" />
+					<input type="text" id="deliveryDetail" class="delivery-input" placeholder="Detalle (referencias, entre calles, piso...)" />
 				</div>
 
 				<ul class="cart-items" id="cartItems"></ul>
@@ -85,7 +93,7 @@ import '../styles/global.css';
 		<div class="modal-overlay" id="paymentModal">
 			<div class="modal">
 				<h3>Cobrar orden</h3>
-				<p class="modal-order-name" id="modalOrderName">Mesa 1</p>
+				<p class="modal-order-name" id="modalOrderName">Pedido 1</p>
 				<p class="modal-total" id="modalTotal">$0.00</p>
 
 				<div class="cash-fields" id="cashFields">

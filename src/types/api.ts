@@ -31,16 +31,22 @@ export interface Orden {
 	etiqueta: string;
 	estado: EstadoOrden;
 	creado_en: string;
+	direccion_entrega: string | null;
+	detalle_entrega: string | null;
 	items: OrdenItem[];
 }
 
 export interface OrdenInput {
 	etiqueta: string;
+	direccion_entrega?: string | null;
+	detalle_entrega?: string | null;
 }
 
 export interface OrdenUpdateInput {
 	etiqueta?: string;
 	estado?: EstadoOrden;
+	direccion_entrega?: string | null;
+	detalle_entrega?: string | null;
 }
 
 export type MetodoPago = 'efectivo' | 'tarjeta';
@@ -62,6 +68,11 @@ export interface Venta {
 	recibido: number | null;
 	cambio: number | null;
 	creado_en: string;
+	direccion_entrega: string | null;
+	detalle_entrega: string | null;
+	// Consecutivo del pedido en el día ("Pedido #N"); se reinicia a diario.
+	// null solo en ventas registradas sin conexión que aún no se sincronizan.
+	folio: number | null;
 	detalle: VentaDetalleItem[];
 }
 
