@@ -36,6 +36,16 @@ export function computeTotals(items: OrdenItem[], productos: Producto[]): { subt
 	return { subtotal, total: subtotal };
 }
 
+// Sugerencias de "recibí esto": el total exacto y hasta 3 redondeos hacia
+// arriba (billetes típicos), sin duplicados ni montos absurdamente más
+// grandes que el total.
+export function quickCashAmounts(total: number): number[] {
+	if (total <= 0) return [];
+	const steps = [50, 100, 200, 500];
+	const roundups = steps.map((step) => Math.ceil(total / step) * step).filter((amount) => amount > total);
+	return [total, ...new Set(roundups)].slice(0, 4);
+}
+
 export function ordenStatus(orden: Orden): { key: 'free' | 'sent' | 'draft'; label: string } {
 	if (orden.items.length === 0) return { key: 'free', label: 'Libre' };
 	if (orden.estado === 'enviada') return { key: 'sent', label: 'Enviada' };
@@ -52,15 +62,24 @@ function todayKey(): string {
 	return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-// Contador que nunca repite un número dentro del mismo día, aunque la orden
-// que lo usó se cobre o se elimine después (a diferencia de contar cuántas
-// órdenes con ese prefijo siguen abiertas, que sí podía repetir el número
-// una vez que la primera desaparecía de la lista). Se reinicia solo al
-// cambiar de día, comparando contra la fecha local guardada.
-export function nextDailySequence(key: string): number {
+// Siguiente número "candidato" del día para este contador, sin consumirlo
+// todavía (a diferencia de un contador que avanza en cada lectura). Quien
+// llama decide si ese número se queda reservado o no llamando (o no) a
+// commitDailySequence — así, crear una orden y borrarla sin cobrarla no
+// desperdicia el número. Se reinicia solo al cambiar de día.
+export function peekDailySequence(key: string): number {
 	const today = todayKey();
 	const stored = getSequence(key);
-	const next = stored && stored.date === today ? stored.next : 1;
-	setSequence(key, { date: today, next: next + 1 });
-	return next;
+	return stored && stored.date === today ? stored.next : 1;
+}
+
+// Reserva "used" (y todo lo anterior) para que nunca vuelva a salir de
+// peekDailySequence, aunque la orden que lo mostraba se borre después. Se
+// llama solo cuando el número realmente se usó para algo permanente (una
+// venta cobrada), no con solo crear una orden.
+export function commitDailySequence(key: string, used: number): void {
+	const today = todayKey();
+	const stored = getSequence(key);
+	const currentNext = stored && stored.date === today ? stored.next : 1;
+	if (used >= currentNext) setSequence(key, { date: today, next: used + 1 });
 }

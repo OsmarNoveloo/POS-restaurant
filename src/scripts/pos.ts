@@ -1,6 +1,16 @@
 import { $ } from '../lib/dom';
 import * as api from '../lib/api';
-import { computeTotals, errorMessage, escapeHtml, findProducto, formatCurrency, nextDailySequence, normalizeSearch } from '../lib/posHelpers';
+import {
+	commitDailySequence,
+	computeTotals,
+	errorMessage,
+	escapeHtml,
+	findProducto,
+	formatCurrency,
+	normalizeSearch,
+	peekDailySequence,
+	quickCashAmounts,
+} from '../lib/posHelpers';
 import { printComanda, printTicket } from '../lib/print/transport';
 import { cachedRead } from '../lib/offline/cache';
 import { isOnline, onStatusChange } from '../lib/offline/network';
@@ -39,6 +49,12 @@ const el = {
 	productSearchEmpty: $<HTMLElement>('productSearchEmpty'),
 	categoryFilters: $<HTMLElement>('categoryFilters'),
 	productGrid: $<HTMLElement>('productGrid'),
+	orderPanel: $<HTMLElement>('orderPanel'),
+	cartPeekToggle: $<HTMLButtonElement>('cartPeekToggle'),
+	cartPeekCount: $<HTMLElement>('cartPeekCount'),
+	cartPeekTotal: $<HTMLElement>('cartPeekTotal'),
+	cartPeekChargeBtn: $<HTMLButtonElement>('cartPeekChargeBtn'),
+	cartBackdrop: $<HTMLElement>('cartBackdrop'),
 	activeOrderName: $<HTMLElement>('activeOrderName'),
 	clearOrderBtn: $<HTMLButtonElement>('clearOrderBtn'),
 	printComandaBtn: $<HTMLButtonElement>('printComandaBtn'),
@@ -53,6 +69,7 @@ const el = {
 	modalOrderName: $<HTMLElement>('modalOrderName'),
 	modalTotal: $<HTMLElement>('modalTotal'),
 	cashFields: $<HTMLElement>('cashFields'),
+	quickCash: $<HTMLElement>('quickCash'),
 	cashReceived: $<HTMLInputElement>('cashReceived'),
 	changeAmount: $<HTMLElement>('changeAmount'),
 	cancelPaymentBtn: $<HTMLButtonElement>('cancelPaymentBtn'),
@@ -230,6 +247,11 @@ function renderCart() {
 	el.chargeBtn.disabled = orden.items.length === 0;
 	el.printComandaBtn.disabled = orden.items.length === 0;
 
+	const count = orden.items.reduce((sum, item) => sum + item.cantidad, 0);
+	el.cartPeekCount.textContent = `${count} producto${count === 1 ? '' : 's'}`;
+	el.cartPeekTotal.textContent = formatCurrency(total);
+	el.cartPeekChargeBtn.disabled = orden.items.length === 0;
+
 	renderOrderTabs();
 }
 
@@ -388,20 +410,46 @@ function printComandaTicket() {
 
 // --- Orders ---
 
+// Hoja del carrito en mobile (barra "peek" que se expande sobre el catálogo).
+function setCartExpanded(expanded: boolean) {
+	el.orderPanel.classList.toggle('expanded', expanded);
+	el.cartPeekToggle.setAttribute('aria-expanded', String(expanded));
+	el.cartBackdrop.classList.toggle('open', expanded);
+}
+
 function switchOrder(ordenId: number) {
 	state.activeOrdenId = ordenId;
 	renderCart();
 }
 
+const PEDIDO_AUTO_LABEL = /^Pedido (\d+)$/;
+
+// Etiqueta "Pedido N" libre para una orden nueva: arranca en el número
+// candidato del día (peekDailySequence, que no se consume solo con
+// mostrarlo) y salta los que ya trae otra orden abierta, para que dos
+// pestañas nuevas no choquen entre sí. El número solo queda reservado para
+// siempre cuando esa orden se cobra (ver commitDailySequence más abajo); si
+// se crea y se borra sin cobrarse, el siguiente "Nueva orden" puede volver a
+// mostrar ese mismo número — a diferencia de un contador que solo avanza,
+// crear y borrar pedidos de prueba ya no deja huecos en la numeración.
+function nextPedidoLabel(excludeOrdenId?: number): string {
+	const used = new Set(
+		state.ordenes
+			.filter((o) => o.id !== excludeOrdenId)
+			.map((o) => Number(o.etiqueta.match(PEDIDO_AUTO_LABEL)?.[1]))
+			.filter((n) => !Number.isNaN(n)),
+	);
+	let n = peekDailySequence('pedido');
+	while (used.has(n)) n++;
+	return `Pedido ${n}`;
+}
+
 // "Mesa N" queda reservado para las órdenes que llegan del Mesero (mesas
-// físicas). Las que se abren directamente en Caja son pedidos sueltos
-// (para llevar, a domicilio, teléfono...), así que se numeran aparte con un
-// contador que nunca repite un número en el día: contar las órdenes "Pedido"
-// que siguen abiertas no sirve, porque en cuanto el Pedido 1 se cobra o se
-// borra, el conteo baja y el siguiente pedido nuevo se vuelve a llamar "1".
+// físicas). Las que se abren directamente en Caja son pedidos sueltos (para
+// llevar, a domicilio, teléfono...), así que se numeran aparte con
+// nextPedidoLabel.
 function addNewOrder() {
-	const nextOrderNumber = nextDailySequence('pedido');
-	const etiqueta = `Pedido ${nextOrderNumber}`;
+	const etiqueta = nextPedidoLabel();
 	const tempId = nextTempId();
 	const orden: Orden = {
 		id: tempId,
@@ -429,19 +477,21 @@ function addNewOrder() {
 	});
 }
 
-const PEDIDO_AUTO_LABEL = /^Pedido \d+$/;
-
 // Después de cobrar, la orden se queda abierta y vacía para poder reusarse
 // (igual que una mesa). Si seguía con su nombre automático "Pedido N", se
-// renombra sola al siguiente número de la secuencia: así, si el cajero le
-// agrega productos a esa misma pestaña sin pasar por "Nueva orden", el
-// siguiente cobro no vuelve a salir como el mismo "Pedido N" ya cobrado. Los
-// nombres que el cajero puso a mano (o "Mesa N" de una mesa real) no se tocan.
+// renombra sola al siguiente número disponible: así, si el cajero le agrega
+// productos a esa misma pestaña sin pasar por "Nueva orden", el siguiente
+// cobro no vuelve a salir como el mismo "Pedido N" ya cobrado. El número que
+// se acaba de cobrar se marca como usado para siempre (commitDailySequence)
+// antes de elegir el próximo, para que ningún otro pedido del día lo repita.
+// Los nombres que el cajero puso a mano (o "Mesa N" de una mesa real) no se tocan.
 async function renameForNextPedido(ordenId: number): Promise<void> {
 	const orden = state.ordenes.find((o) => o.id === ordenId);
-	if (!orden || !PEDIDO_AUTO_LABEL.test(orden.etiqueta)) return;
+	const match = orden?.etiqueta.match(PEDIDO_AUTO_LABEL);
+	if (!orden || !match) return;
 
-	const nuevaEtiqueta = `Pedido ${nextDailySequence('pedido')}`;
+	commitDailySequence('pedido', Number(match[1]));
+	const nuevaEtiqueta = nextPedidoLabel(ordenId);
 	const previous = orden.etiqueta;
 	orden.etiqueta = nuevaEtiqueta;
 
@@ -555,9 +605,16 @@ function openPaymentModal() {
 	const { total } = computeTotals(orden.items, state.productos);
 	el.modalOrderName.textContent = orden.etiqueta;
 	el.modalTotal.textContent = formatCurrency(total);
+	el.quickCash.innerHTML = quickCashAmounts(total)
+		.map(
+			(amount, i) =>
+				`<button type="button" class="quick-cash-chip" data-amount="${amount}">${i === 0 ? 'Exacto' : formatCurrency(amount)}</button>`,
+		)
+		.join('');
 	el.cashReceived.value = '';
 	el.changeAmount.textContent = formatCurrency(0);
 	el.confirmPaymentBtn.disabled = false;
+	setCartExpanded(false);
 	el.modal.classList.add('open');
 }
 
@@ -753,6 +810,18 @@ function attachEvents() {
 		if (action === 'remove') removeItem(productId);
 	});
 
+	el.cartPeekToggle.addEventListener('click', () => {
+		setCartExpanded(!el.orderPanel.classList.contains('expanded'));
+	});
+	el.cartPeekChargeBtn.addEventListener('click', openPaymentModal);
+
+	el.quickCash.addEventListener('click', (e) => {
+		const chip = (e.target as HTMLElement).closest<HTMLButtonElement>('.quick-cash-chip');
+		if (!chip) return;
+		el.cashReceived.value = chip.dataset.amount ?? '';
+		updateChange();
+	});
+
 	el.clearOrderBtn.addEventListener('click', clearActiveOrder);
 	el.printComandaBtn.addEventListener('click', printComandaTicket);
 	el.deliveryAddress.addEventListener('change', commitDeliveryInfo);
@@ -776,6 +845,22 @@ function attachEvents() {
 	el.confirmModal.addEventListener('click', (e) => {
 		if (e.target === el.confirmModal) closeConfirmModal();
 	});
+
+	// Cierra la hoja del carrito (mobile) al tocar fuera de ella (incluido el backdrop).
+	// En fase de captura: acciones como quitar un producto reconstruyen #cartItems
+	// (renderCart -> innerHTML = '') antes de que un listener en fase de burbuja
+	// llegara a correr, dejando el botón tocado desconectado del DOM y haciendo
+	// que closest('#orderPanel') fallara — cerrando la hoja por error tras cada
+	// cambio en el carrito. En captura, la ancestría se evalúa antes de esa mutación.
+	document.addEventListener(
+		'click',
+		(e) => {
+			if (!el.orderPanel.classList.contains('expanded')) return;
+			if ((e.target as HTMLElement).closest('#orderPanel')) return;
+			setCartExpanded(false);
+		},
+		true,
+	);
 }
 
 // --- Sincronización offline ---

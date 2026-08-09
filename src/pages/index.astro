@@ -51,52 +51,66 @@ import '../styles/global.css';
 		</header>
 
 		<main class="pos">
-			<section class="catalog">
+			<section class="catalog" id="posCatalog">
 				<input type="search" class="product-search" id="productSearch" placeholder="🔍 Buscar producto…" aria-label="Buscar producto" />
 				<div class="category-filters" id="categoryFilters"></div>
 				<div class="product-grid" id="productGrid"></div>
 				<p class="empty-state" id="productSearchEmpty" hidden>No se encontraron productos.</p>
 			</section>
 
-			<aside class="order-panel">
-				<div class="order-panel-header">
-					<h2 id="activeOrderName">Pedido 1</h2>
-					<div class="header-actions">
-						<button id="printComandaBtn" class="btn text" title="Imprimir comanda para cocina, sin cobrar" disabled>🖨️ Comanda</button>
-						<button id="clearOrderBtn" class="btn text" title="Vaciar orden">Vaciar</button>
+			<aside class="order-panel" id="orderPanel">
+				<button class="cart-peek" id="cartPeekToggle" type="button" aria-expanded="false" aria-controls="orderPanelBody">
+					<span class="cart-peek-chevron" aria-hidden="true">▲</span>
+					<span class="cart-peek-info">
+						<span id="cartPeekCount">0 productos</span>
+						<span id="cartPeekTotal">$0.00</span>
+					</span>
+				</button>
+				<button id="cartPeekChargeBtn" class="btn primary cart-peek-charge" disabled>Cobrar</button>
+
+				<div class="order-panel-body" id="orderPanelBody">
+					<div class="order-panel-header">
+						<h2 id="activeOrderName">Pedido 1</h2>
+						<div class="header-actions">
+							<button id="printComandaBtn" class="btn text" title="Imprimir comanda para cocina, sin cobrar" disabled>🖨️ Comanda</button>
+							<button id="clearOrderBtn" class="btn text" title="Vaciar orden">Vaciar</button>
+						</div>
 					</div>
-				</div>
 
-				<div class="delivery-info">
-					<input type="text" id="deliveryAddress" class="delivery-input" placeholder="📍 Dirección de entrega (opcional)" />
-					<input type="text" id="deliveryDetail" class="delivery-input" placeholder="Detalle (referencias, entre calles, piso...)" />
-				</div>
-
-				<ul class="cart-items" id="cartItems"></ul>
-				<p class="order-empty" id="orderEmpty">Agrega productos del menú para iniciar la orden.</p>
-
-				<div class="order-totals">
-					<div class="row">
-						<span>Subtotal</span>
-						<span id="subtotal">$0.00</span>
+					<div class="delivery-info">
+						<input type="text" id="deliveryAddress" class="delivery-input" placeholder="📍 Dirección de entrega (opcional)" />
+						<input type="text" id="deliveryDetail" class="delivery-input" placeholder="Detalle (referencias, entre calles, piso...)" />
 					</div>
-					<div class="row total">
-						<span>Total</span>
-						<span id="total">$0.00</span>
-					</div>
-				</div>
 
-				<button id="chargeBtn" class="btn primary charge-btn" disabled>Cobrar</button>
+					<ul class="cart-items" id="cartItems"></ul>
+					<p class="order-empty" id="orderEmpty">Agrega productos del menú para iniciar la orden.</p>
+
+					<div class="order-totals">
+						<div class="row">
+							<span>Subtotal</span>
+							<span id="subtotal">$0.00</span>
+						</div>
+						<div class="row total">
+							<span>Total</span>
+							<span id="total">$0.00</span>
+						</div>
+					</div>
+
+					<button id="chargeBtn" class="btn primary charge-btn" disabled>Cobrar</button>
+				</div>
 			</aside>
 		</main>
 
+		<div class="cart-backdrop" id="cartBackdrop"></div>
+
 		<div class="modal-overlay" id="paymentModal">
-			<div class="modal">
+			<div class="modal modal-sheet">
 				<h3>Cobrar orden</h3>
 				<p class="modal-order-name" id="modalOrderName">Pedido 1</p>
 				<p class="modal-total" id="modalTotal">$0.00</p>
 
 				<div class="cash-fields" id="cashFields">
+					<div class="quick-cash" id="quickCash"></div>
 					<label for="cashReceived">Recibido</label>
 					<input type="number" id="cashReceived" min="0" step="0.01" placeholder="0.00" />
 					<div class="change-row">

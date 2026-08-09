@@ -419,6 +419,24 @@ a.btn {
 	min-width: 0;
 }
 
+.cart-peek,
+.cart-peek-charge {
+	display: none;
+}
+
+/* Envuelve el contenido de siempre del carrito: en escritorio es transparente
+   (mismo layout que antes), en mobile es lo que colapsa/expande la hoja. */
+.order-panel-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.cart-backdrop {
+	display: none;
+}
+
 .order-panel-header {
 	display: flex;
 	align-items: center;
@@ -750,6 +768,28 @@ a.btn {
 	font-weight: 800;
 	color: var(--brick);
 	margin: 0 0 1rem;
+}
+
+.quick-cash {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-bottom: 0.8rem;
+}
+
+.quick-cash-chip {
+	flex: 1 1 70px;
+	border: 1px solid var(--cream-dark);
+	background: var(--cream);
+	border-radius: 8px;
+	padding: 0.6rem 0.4rem;
+	font-weight: 700;
+	font-size: 0.9rem;
+	color: var(--ink);
+}
+
+.quick-cash-chip:active {
+	transform: scale(0.97);
 }
 
 .cash-fields label {
@@ -1255,6 +1295,90 @@ a.btn {
 		max-height: 220px;
 	}
 
+	/* Caja: el carrito se vuelve una barra inferior fija + hoja expandible.
+	   Escapado por id (#orderPanel) para no afectar el panel de Mesero, que
+	   comparte la clase .order-panel pero no tiene el peek bar ni el JS que
+	   lo controla. */
+	#orderPanel {
+		order: unset;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 40;
+		display: grid;
+		grid-template-columns: 1fr auto;
+		align-items: center;
+		padding: 0;
+		border-radius: var(--radius) var(--radius) 0 0;
+		box-shadow: 0 -8px 24px rgba(62, 39, 35, 0.18);
+	}
+
+	.cart-peek {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.9rem 1.1rem;
+		text-align: left;
+		background: none;
+		border: none;
+		color: var(--ink);
+	}
+
+	.cart-peek-chevron {
+		color: var(--muted);
+		transition: transform 0.2s ease;
+	}
+
+	#orderPanel.expanded .cart-peek-chevron {
+		transform: rotate(180deg);
+	}
+
+	.cart-peek-info {
+		display: flex;
+		flex-direction: column;
+		line-height: 1.25;
+	}
+
+	#cartPeekCount {
+		font-size: 0.75rem;
+		color: var(--muted);
+	}
+
+	#cartPeekTotal {
+		font-weight: 700;
+	}
+
+	.cart-peek-charge {
+		display: block;
+		margin: 0 1.1rem 0 0;
+	}
+
+	#orderPanel .order-panel-body {
+		grid-column: 1 / -1;
+		max-height: 0;
+		overflow: hidden;
+		padding: 0 1.1rem;
+		transition: max-height 0.2s ease, padding 0.2s ease;
+	}
+
+	#orderPanel.expanded .order-panel-body {
+		max-height: 65vh;
+		padding: 0 1.1rem calc(1.1rem + env(safe-area-inset-bottom));
+	}
+
+	.cart-backdrop.open {
+		display: block;
+		position: fixed;
+		inset: 0;
+		background: rgba(62, 39, 35, 0.55);
+		z-index: 39;
+	}
+
+	#posCatalog {
+		padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+	}
+
 	.dashboard-grid {
 		grid-template-columns: 1fr;
 	}
@@ -1265,6 +1389,28 @@ a.btn {
 
 	.product-grid {
 		grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+	}
+
+	/* Modal de pago como bottom-sheet (el resto de los modales se quedan centrados) */
+	#paymentModal {
+		align-items: flex-end;
+	}
+
+	#paymentModal .modal-sheet {
+		width: 100%;
+		max-width: none;
+		border-radius: var(--radius) var(--radius) 0 0;
+		padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+		animation: sheet-slide-up 0.2s ease;
+	}
+
+	@keyframes sheet-slide-up {
+		from {
+			transform: translateY(100%);
+		}
+		to {
+			transform: translateY(0);
+		}
 	}
 }
 
